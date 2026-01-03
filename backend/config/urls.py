@@ -18,7 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 
 from rest_framework import routers
-from expenses.views import ExpenseViewSet
+from expenses.views import ExpenseViewSet, MonthlySummaryView
 
 router = routers.DefaultRouter()
 router.register(r"expenses", ExpenseViewSet, basename="expense")
@@ -26,4 +26,5 @@ router.register(r"expenses", ExpenseViewSet, basename="expense")
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include(router.urls)),
+    path("api/summary/monthly/", MonthlySummaryView.as_view(), name="monthly-summary"),
 ]
