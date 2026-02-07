@@ -23,6 +23,7 @@ from expenses.views import (
     MonthlySummaryView,
     RakutenCSVImportView,
     MitsuiCSVImportView,
+    MonthStatusUpdateView,
 )
 
 router = routers.DefaultRouter()
@@ -34,4 +35,5 @@ urlpatterns = [
     path("api/summary/monthly/", MonthlySummaryView.as_view(), name="monthly-summary"),
     path("api/import/rakuten/", RakutenCSVImportView.as_view(), name="import-rakuten"),
     path("api/import/mitsui/", MitsuiCSVImportView.as_view(), name="import-mitsui"),
+    path("api/month/status/", MonthStatusUpdateView.as_view(), name="month-status"), 
 ]

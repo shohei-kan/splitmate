@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 
 from .models import Expense
-from .serializers import ExpenseSerializer, MonthlySummarySerializer
+from .serializers import (ExpenseSerializer, MonthlySummarySerializer, MonthStatusUpdateSerializer,)
 from .importers import import_rakuten_csv, import_mitsui_csv
 
 
@@ -24,6 +24,14 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     ordering_fields = ["date", "amount", "created_at"]
     ordering = ["-date", "id"]
     search_fields = ["store", "memo"]
+    
+    #手入力
+    def perform_create(self, serializer):
+        """
+        手入力で作成されたレコードは source を必ず 'manual' に固定。
+        （CSV インポートは別経路で作成しているので影響なし）
+        """
+        serializer.save(source=Expense.Source.MANUAL)
 
 
 class MonthlySummaryView(APIView):
@@ -40,7 +48,8 @@ class MonthlySummaryView(APIView):
     - transfer_amount: 妻→私 への振込額
                        = half - wife_shared + wife_personal
     """
-
+        
+      
     def get(self, request, *args, **kwargs):
         today = datetime.date.today()
         try:
@@ -59,41 +68,46 @@ class MonthlySummaryView(APIView):
 
         qs = Expense.objects.filter(date__gte=first_day, date__lte=last_day)
 
-        status_param = request.query_params.get("status")
-        if status_param:
-            qs = qs.filter(status=status_param)
+        # draft / final で絞り込みたいとき用 (オプション)
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
 
-        # 共有支出の合計
+        # ① 共有支出合計（誰が払ったかは関係なく shared だけ全部）
         shared_total = (
             qs.filter(burden_type=Expense.BurdenType.SHARED)
             .aggregate(total=Sum("amount"))["total"]
             or 0
         )
 
-        # 妻が支払った共有支出（payer=wife）
+        # ② 妻が払った共有分（手入力＋card_user=wife）
+        #    → 妻の現金/妻名義カードで払った共有支出だけをここに積むイメージ
         wife_shared = (
             qs.filter(
                 burden_type=Expense.BurdenType.SHARED,
-                payer=Expense.CardUser.WIFE,
+                source=Expense.Source.MANUAL,
+                card_user=Expense.CardUser.WIFE,
             )
             .aggregate(total=Sum("amount"))["total"]
             or 0
         )
 
-        # 妻の個人利用
+        # ③ 妻の個人利用
+        #    burden_type=wife_only は、CSV でも手入力でも全部カウント
         wife_personal = (
             qs.filter(burden_type=Expense.BurdenType.WIFE_ONLY)
             .aggregate(total=Sum("amount"))["total"]
             or 0
         )
 
-        # 自分の個人利用（参考値）
+        # ④ 私個人の支出（参考用）
         me_only_total = (
             qs.filter(burden_type=Expense.BurdenType.ME_ONLY)
             .aggregate(total=Sum("amount"))["total"]
             or 0
         )
 
+        # ⑤ 折半額＆振込額
         half = shared_total // 2
         transfer_amount = half - wife_shared + wife_personal
 
@@ -110,8 +124,8 @@ class MonthlySummaryView(APIView):
 
         serializer = MonthlySummarySerializer(summary_data)
         return Response(serializer.data)
-
-
+    
+    
 class RakutenCSVImportView(APIView):
     """
     POST /api/import/rakuten/?card_user=me|wife|unknown
@@ -217,4 +231,40 @@ class MitsuiCSVImportView(APIView):
                 "source": Expense.Source.CSV_MITSUI,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+class MonthStatusUpdateView(APIView):
+    """
+    POST /api/month/status/
+
+    指定した year/month に含まれる Expense の status を
+    draft / final にまとめて更新する。
+    """
+
+    def post(self, request, *args, **kwargs):
+        serializer = MonthStatusUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        year = serializer.validated_data["year"]
+        month = serializer.validated_data["month"]
+        status_value = serializer.validated_data["status"]
+
+        first_day = datetime.date(year, month, 1)
+        last_day = datetime.date(
+            year,
+            month,
+            calendar.monthrange(year, month)[1],
+        )
+
+        qs = Expense.objects.filter(date__gte=first_day, date__lte=last_day)
+        updated = qs.update(status=status_value)
+
+        return Response(
+            {
+                "year": year,
+                "month": month,
+                "status": status_value,
+                "updated": updated,
+            },
+            status=status.HTTP_200_OK,
         )

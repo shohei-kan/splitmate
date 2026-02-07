@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import Expense
-
+import datetime  
 
 class ExpenseSerializer(serializers.ModelSerializer):
     class Meta:
@@ -18,7 +18,11 @@ class ExpenseSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id",
+                            "source",
+                            "status",
+                            "created_at",
+                            "updated_at"]
 
 
 class MonthlySummarySerializer(serializers.Serializer):
@@ -30,3 +34,27 @@ class MonthlySummarySerializer(serializers.Serializer):
     me_only_total = serializers.IntegerField()
     half = serializers.IntegerField()
     transfer_amount = serializers.IntegerField()
+
+import datetime  # もしまだ上に無ければ追加
+
+from rest_framework import serializers
+
+from .models import Expense
+
+
+class MonthStatusUpdateSerializer(serializers.Serializer):
+    year = serializers.IntegerField()
+    month = serializers.IntegerField()
+    status = serializers.ChoiceField(choices=Expense.Status.choices)
+
+    def validate(self, attrs):
+        year = attrs["year"]
+        month = attrs["month"]
+
+        # year / month が変な値じゃないかチェック
+        try:
+            datetime.date(year, month, 1)
+        except ValueError:
+            raise serializers.ValidationError("year / month が不正です。")
+
+        return attrs
