@@ -18,7 +18,12 @@ from django.contrib import admin
 from django.urls import path, include
 
 from rest_framework import routers
-from expenses.views import ExpenseViewSet, MonthlySummaryView
+from expenses.views import (
+    ExpenseViewSet,
+    MonthlySummaryView,
+    RakutenCSVImportView,
+    MitsuiCSVImportView,
+)
 
 router = routers.DefaultRouter()
 router.register(r"expenses", ExpenseViewSet, basename="expense")
@@ -27,4 +32,6 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include(router.urls)),
     path("api/summary/monthly/", MonthlySummaryView.as_view(), name="monthly-summary"),
+    path("api/import/rakuten/", RakutenCSVImportView.as_view(), name="import-rakuten"),
+    path("api/import/mitsui/", MitsuiCSVImportView.as_view(), name="import-mitsui"),
 ]

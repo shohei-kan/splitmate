@@ -24,10 +24,22 @@ class Expense(models.Model):
     date = models.DateField()
     store = models.CharField(max_length=255)
 
+    # 👇 UIの「カード利用者」＝誰が使ったか（買い物した人）
     card_user = models.CharField(
         max_length=10,
         choices=CardUser.choices,
+        blank=True,
+        null=True,
         default=CardUser.UNKNOWN,
+        help_text="誰がこの支出を使ったか（UI表示用）",
+    )
+
+    # 👇 実際に支払った人（カード or 現金）。精算ロジックは基本こちらを見る
+    payer = models.CharField(
+        max_length=10,
+        choices=CardUser.choices,
+        default=CardUser.ME,
+        help_text="実際に支払った人（精算ロジック用）",
     )
 
     burden_type = models.CharField(
