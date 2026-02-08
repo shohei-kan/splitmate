@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Expense
+from .models import Expense, ExclusionRule
 import datetime  
 
 class ExpenseSerializer(serializers.ModelSerializer):
@@ -18,11 +18,13 @@ class ExpenseSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id",
-                            "source",
-                            "status",
-                            "created_at",
-                            "updated_at"]
+        read_only_fields = [
+            "id",
+            "source",
+            "status",
+            "created_at",
+            "updated_at"
+        ]
 
 
 class MonthlySummarySerializer(serializers.Serializer):
@@ -58,3 +60,18 @@ class MonthStatusUpdateSerializer(serializers.Serializer):
             raise serializers.ValidationError("year / month が不正です。")
 
         return attrs
+    
+class ExclusionRuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExclusionRule
+        fields = [
+            "id",
+            "keyword",
+            "target_source",
+            "is_active",
+            "memo",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]    
+    

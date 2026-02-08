@@ -6,8 +6,13 @@ from rest_framework import viewsets, filters, parsers, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
-from .models import Expense
-from .serializers import (ExpenseSerializer, MonthlySummarySerializer, MonthStatusUpdateSerializer,)
+from .models import Expense, ExclusionRule
+from .serializers import (
+    ExpenseSerializer,
+    MonthlySummarySerializer,
+    MonthStatusUpdateSerializer,
+    ExclusionRuleSerializer,
+    )
 from .importers import import_rakuten_csv, import_mitsui_csv
 
 
@@ -33,6 +38,19 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         """
         serializer.save(source=Expense.Source.MANUAL)
 
+#CSVの除外ワード用
+class ExclusionRuleViewSet(viewsets.ModelViewSet):
+    """
+    /api/exclusion-rules/ 用の CRUD.
+    """
+
+    queryset = ExclusionRule.objects.all()
+    serializer_class = ExclusionRuleSerializer
+
+    filter_backends = [filters.OrderingFilter, filters.SearchFilter]
+    ordering_fields = ["keyword", "created_at"]
+    ordering = ["keyword", "id"]
+    search_fields = ["keyword", "memo"]
 
 class MonthlySummaryView(APIView):
     """
@@ -128,14 +146,10 @@ class MonthlySummaryView(APIView):
     
 class RakutenCSVImportView(APIView):
     """
-    POST /api/import/rakuten/?card_user=me|wife|unknown
+    POST /api/import/rakuten/?card_user=me|wife
 
     楽天カードのCSVファイルをアップロードして Expense に取り込む。
-
-    - burden_type はすべて shared
-    - payer は「請求はすべて自分持ち」前提で backend 側で me 固定
-    - CSV の「利用者」は UI のカード利用者 (card_user=me|wife) として保存
-    - クエリの card_user は「CSV側で利用者が空欄だったケースのデフォルト値」
+    利用者列から本⼈/家族を判定して card_user を設定する。
     """
 
     parser_classes = [parsers.MultiPartParser, parsers.FormParser]
@@ -148,7 +162,7 @@ class RakutenCSVImportView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # 利用者列が空欄のときのデフォルト card_user
+        # クエリで渡された card_user は「利用者が空欄だったときのデフォルト」として使う
         default_card_user = request.query_params.get(
             "card_user", Expense.CardUser.UNKNOWN
         )
@@ -163,9 +177,14 @@ class RakutenCSVImportView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        created, skipped = import_rakuten_csv(
-            file,
-            default_card_user=default_card_user,
+        (
+            created,
+            skipped,
+            excluded_samples,
+            excluded_count,
+            duplicate_count,
+        ) = import_rakuten_csv(
+            file, default_card_user=default_card_user
         )
 
         return Response(
@@ -174,23 +193,18 @@ class RakutenCSVImportView(APIView):
                 "skipped": skipped,
                 "default_card_user": default_card_user,
                 "source": Expense.Source.CSV_RAKUTEN,
+                "excluded_samples": excluded_samples,
+                "excluded_count": excluded_count,
+                "duplicate_count": duplicate_count,
             },
             status=status.HTTP_201_CREATED,
         )
-
-
+        
 class MitsuiCSVImportView(APIView):
     """
-    POST /api/import/mitsui/?card_user=me|wife|unknown
+    POST /api/import/mitsui/?card_user=me|wife
 
     三井住友カードのCSVファイルをアップロードして Expense に取り込む。
-
-    - A列: 日付
-    - B列+G列: 利用店名
-    - C列: 利用金額
-    - 利用者カラムは無いので、card_user はクエリの値
-      (デフォルトは me)
-    - payer も「三井の請求は自分のカード」前提で backend 側で me 固定
     """
 
     parser_classes = [parsers.MultiPartParser, parsers.FormParser]
@@ -204,10 +218,8 @@ class MitsuiCSVImportView(APIView):
             )
 
         card_user = request.query_params.get(
-            "card_user",
-            Expense.CardUser.ME,
+            "card_user", Expense.CardUser.ME
         )
-
         if card_user not in (
             Expense.CardUser.ME,
             Expense.CardUser.WIFE,
@@ -218,10 +230,13 @@ class MitsuiCSVImportView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        created, skipped = import_mitsui_csv(
-            file,
-            card_user=card_user,
-        )
+        (
+            created,
+            skipped,
+            excluded_samples,
+            excluded_count,
+            duplicate_count,
+        ) = import_mitsui_csv(file, card_user=card_user)
 
         return Response(
             {
@@ -229,9 +244,13 @@ class MitsuiCSVImportView(APIView):
                 "skipped": skipped,
                 "card_user": card_user,
                 "source": Expense.Source.CSV_MITSUI,
+                "excluded_samples": excluded_samples,
+                "excluded_count": excluded_count,
+                "duplicate_count": duplicate_count,
             },
             status=status.HTTP_201_CREATED,
         )
+
 
 class MonthStatusUpdateView(APIView):
     """

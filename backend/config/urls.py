@@ -24,10 +24,12 @@ from expenses.views import (
     RakutenCSVImportView,
     MitsuiCSVImportView,
     MonthStatusUpdateView,
+    ExclusionRuleViewSet,
 )
 
 router = routers.DefaultRouter()
 router.register(r"expenses", ExpenseViewSet, basename="expense")
+router.register(r"exclusion-rules", ExclusionRuleViewSet, basename="exclusion-rule")
 
 urlpatterns = [
     path("admin/", admin.site.urls),

@@ -72,3 +72,36 @@ class Expense(models.Model):
 
     def __str__(self) -> str:
         return f"{self.date} {self.store} {self.amount}"
+
+
+class ExclusionRule(models.Model):
+    """
+    店名に含まれるキーワードで、CSV インポート時の行を除外するためのルール。
+    """
+
+    class TargetSource(models.TextChoices):
+        ALL = "all", "All sources"
+        CSV_RAKUTEN = Expense.Source.CSV_RAKUTEN
+        CSV_MITSUI = Expense.Source.CSV_MITSUI
+
+    keyword = models.CharField(
+        max_length=255,
+        help_text="店名にこの文字列が含まれていたら除外します",
+    )
+    target_source = models.CharField(
+        max_length=20,
+        choices=TargetSource.choices,
+        default=TargetSource.ALL,
+        help_text="どのソースに適用するか。all なら全 CSV に適用。",
+    )
+    is_active = models.BooleanField(default=True)
+    memo = models.CharField(max_length=255, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["keyword", "id"]
+
+    def __str__(self) -> str:
+        return f"[{self.target_source}] {self.keyword}"

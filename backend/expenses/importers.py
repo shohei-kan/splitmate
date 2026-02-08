@@ -1,8 +1,11 @@
 import csv
 import datetime
-from typing import IO, Dict, List, Tuple
+import unicodedata
+from typing import IO, Dict, List, Tuple, Optional
 
-from .models import Expense
+from django.db import transaction
+
+from .models import Expense, ExclusionRule
 
 
 # 共通ヘルパー ---------------------------------------------------------
@@ -61,14 +64,69 @@ def _get_first(row: Dict[str, str], keys: List[str]) -> str:
 
     return ""
 
+def _normalize_text(value: str) -> str:
+    """
+    除外ワード判定用の正規化:
+      - NFKC で全角/半角や互換文字を揃える
+      - casefold() で大文字小文字を無視
+    必要ならここでスペース除去なども追加できる。
+    """
+    if not value:
+        return ""
+    # 全角英数・記号などを半角に寄せる & 互換文字を統一
+    normalized = unicodedata.normalize("NFKC", value)
+    # 大文字/小文字を吸収
+    normalized = normalized.casefold()
+    return normalized
+
+
+
+# 除外ルール関連 -------------------------------------------------------
+
+
+def _load_exclusion_rules(source: str) -> List[ExclusionRule]:
+    # ここは今ある実装のままでOKならそのまま使っていい
+    return list(
+        ExclusionRule.objects.filter(
+            target_source=source,
+            is_active=True,
+        )
+    )
+
+
+def _match_exclusion_rule(
+    store: str,
+    rules: List[ExclusionRule],
+) -> ExclusionRule | None:
+    """
+    store と除外ルールの keyword を正規化して部分一致判定する。
+    全角/半角・大文字小文字・スペース違いを吸収。
+    """
+    norm_store = _normalize_text(store)
+
+    for rule in rules:
+        kw = (rule.keyword or "").strip()
+        if not kw:
+            continue
+
+        norm_kw = _normalize_text(kw)
+        if not norm_kw:
+            continue
+
+        if norm_kw in norm_store:
+            return rule
+
+    return None
+
 
 # 楽天カードインポート -------------------------------------------------
 
 
+@transaction.atomic
 def import_rakuten_csv(
     file_obj: IO[bytes],
     default_card_user: str = Expense.CardUser.UNKNOWN,
-) -> Tuple[int, int]:
+) -> Tuple[int, int, List[Dict[str, str]], int, int]:
     """
     楽天カード CSV をインポートして Expense を bulk_create する。
 
@@ -84,14 +142,33 @@ def import_rakuten_csv(
     前提:
       - 請求はすべて自分のカードに来るため、payer は一律 me。
       - card_user は「誰が利用したか」（UI のカード利用者）として保存する。
+      - 除外ルール(ExclusionRule) にマッチした行は作成せず excluded_samples に記録。
+      - 既に同じ支出が DB にある場合は重複としてスキップする。
+        重複判定キー: (date, store, amount, source, card_user)
     """
+
+    # 有効な除外ルールを読み込む（楽天用）
+    exclusion_rules = _load_exclusion_rules(Expense.Source.CSV_RAKUTEN)
+
+    # すでに登録済みのキーを全部取得（個人利用規模ならこれで十分）
+    existing_keys = set(
+        Expense.objects.filter(source=Expense.Source.CSV_RAKUTEN).values_list(
+            "date", "store", "amount", "source", "card_user"
+        )
+    )
+
+    # 同一CSV内での重複も防ぐために、今回のインポート中に見つけたキーも管理
+    seen_keys = set()
+
+    expenses_to_create: List[Expense] = []
+    skipped = 0
+    duplicate_count = 0
+    excluded_samples: List[Dict[str, str]] = []
+    excluded_count = 0
 
     # UTF-8 BOM を想定
     text_stream = (line.decode("utf-8-sig") for line in file_obj)
     reader = csv.DictReader(text_stream)
-
-    expenses_to_create: List[Expense] = []
-    skipped = 0
 
     for row in reader:
         # 楽天のカラム名に合わせる
@@ -122,6 +199,30 @@ def import_rakuten_csv(
             skipped += 1
             continue
 
+        # 1) 除外ルール判定
+        rule = _match_exclusion_rule(store, exclusion_rules)
+        if rule:
+            excluded_samples.append(
+                {
+                    "date": date_str,
+                    "store": store,
+                    "amount": amount_str,
+                    "reason": "excluded_by_rule",
+                }
+            )
+            excluded_count += 1
+            skipped += 1
+            continue
+
+        # 2) 重複判定 (DB 既存 + 今回 CSV 内)
+        key = (date, store[:255], amount, Expense.Source.CSV_RAKUTEN, card_user)
+        if key in existing_keys or key in seen_keys:
+            duplicate_count += 1
+            skipped += 1
+            continue
+
+        seen_keys.add(key)
+
         expense = Expense(
             date=date,
             store=store[:255],
@@ -140,16 +241,17 @@ def import_rakuten_csv(
         Expense.objects.bulk_create(expenses_to_create)
         created = len(expenses_to_create)
 
-    return created, skipped
+    return created, skipped, excluded_samples, excluded_count, duplicate_count
 
 
 # 三井住友カードインポート ----------------------------------------------
 
 
+@transaction.atomic
 def import_mitsui_csv(
     file_obj: IO[bytes],
     card_user: str = Expense.CardUser.ME,
-) -> Tuple[int, int]:
+) -> Tuple[int, int, List[Dict[str, str]], int, int]:
     """
     三井住友カード CSV をインポートして Expense を bulk_create する。
 
@@ -163,13 +265,29 @@ def import_mitsui_csv(
           G列: 店舗詳細(任意)
       - 利用者カラムはないので card_user は引数の値をそのまま使う。
       - 三井の請求も自分の口座前提なので payer=me 固定。
+      - 除外ルール(ExclusionRule) にマッチした行は作成せず excluded_samples に記録。
+      - 既に同じ支出が DB にある場合は重複としてスキップする。
+        重複判定キー: (date, store, amount, source, card_user)
     """
 
-    text_stream = (line.decode("cp932", errors="ignore") for line in file_obj)
-    reader = csv.reader(text_stream)
+    # 三井用の除外ルール
+    exclusion_rules = _load_exclusion_rules(Expense.Source.CSV_MITSUI)
+
+    existing_keys = set(
+        Expense.objects.filter(source=Expense.Source.CSV_MITSUI).values_list(
+            "date", "store", "amount", "source", "card_user"
+        )
+    )
+    seen_keys = set()
 
     expenses_to_create: List[Expense] = []
     skipped = 0
+    duplicate_count = 0
+    excluded_samples: List[Dict[str, str]] = []
+    excluded_count = 0
+
+    text_stream = (line.decode("cp932", errors="ignore") for line in file_obj)
+    reader = csv.reader(text_stream)
 
     for row in reader:
         if not row:
@@ -208,6 +326,30 @@ def import_mitsui_csv(
             skipped += 1
             continue
 
+        # 1) 除外ルール判定
+        rule = _match_exclusion_rule(store, exclusion_rules)
+        if rule:
+            excluded_samples.append(
+                {
+                    "date": date_str,
+                    "store": store,
+                    "amount": amount_str,
+                    "reason": "excluded_by_rule",
+                }
+            )
+            excluded_count += 1
+            skipped += 1
+            continue
+
+        # 2) 重複判定
+        key = (date, store[:255], amount, Expense.Source.CSV_MITSUI, card_user)
+        if key in existing_keys or key in seen_keys:
+            duplicate_count += 1
+            skipped += 1
+            continue
+
+        seen_keys.add(key)
+
         expense = Expense(
             date=date,
             store=store[:255],
@@ -226,4 +368,4 @@ def import_mitsui_csv(
         Expense.objects.bulk_create(expenses_to_create)
         created = len(expenses_to_create)
 
-    return created, skipped
+    return created, skipped, excluded_samples, excluded_count, duplicate_count
