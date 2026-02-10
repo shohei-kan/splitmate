@@ -18,19 +18,108 @@ from .importers import import_rakuten_csv, import_mitsui_csv
 
 class ExpenseViewSet(viewsets.ModelViewSet):
     """
-    /api/expenses/ 用の基本 CRUD
+    /api/expenses/ 用の基本 CRUD + フィルタ
+
+    クエリパラメータ例:
+      - year, month: 年月指定
+          /api/expenses/?year=2025&month=12
+
+      - date_from, date_to: 日付範囲
+          /api/expenses/?date_from=2025-12-01&date_to=2025-12-31
+
+      - status: draft / final
+          /api/expenses/?status=draft
+
+      - source: csv_rakuten / csv_mitsui / manual
+          /api/expenses/?source=csv_rakuten
+
+      - burden_type: shared / wife_only / me_only
+          /api/expenses/?burden_type=shared
+
+      - card_user: me / wife / unknown
+          /api/expenses/?card_user=wife
+
+      - category: food / daily / outside_food / utility / travel / other / uncategorized
+          /api/expenses/?category=travel
+
+      - search: store / memo の部分一致（DRF SearchFilter）
+          /api/expenses/?search=イオン
     """
 
-    queryset = Expense.objects.all()
     serializer_class = ExpenseSerializer
-
-    # ひとまず簡単なソート・検索だけ
     filter_backends = [filters.OrderingFilter, filters.SearchFilter]
     ordering_fields = ["date", "amount", "created_at"]
     ordering = ["-date", "id"]
     search_fields = ["store", "memo"]
-    
-    #手入力
+
+    def get_queryset(self):
+        qs = Expense.objects.all()
+        params = self.request.query_params
+
+        # --- year & month で絞り込み（UIの「対象月」で使う想定） ---
+        year = params.get("year")
+        month = params.get("month")
+
+        if year and month:
+            try:
+                year_i = int(year)
+                month_i = int(month)
+
+                first_day = datetime.date(year_i, month_i, 1)
+                # 月末日を求める
+                if month_i == 12:
+                    last_day = datetime.date(year_i + 1, 1, 1) - datetime.timedelta(days=1)
+                else:
+                    last_day = datetime.date(year_i, month_i + 1, 1) - datetime.timedelta(days=1)
+
+                qs = qs.filter(date__gte=first_day, date__lte=last_day)
+            except ValueError:
+                # 変な値が来たら year/month フィルタは無視
+                pass
+
+        # --- date_from / date_to で範囲指定 ---
+        date_from = params.get("date_from")
+        date_to = params.get("date_to")
+
+        if date_from:
+            try:
+                qs = qs.filter(date__gte=datetime.date.fromisoformat(date_from))
+            except ValueError:
+                pass
+
+        if date_to:
+            try:
+                qs = qs.filter(date__lte=datetime.date.fromisoformat(date_to))
+            except ValueError:
+                pass
+
+        # --- status フィルタ（draft / final） ---
+        status_value = params.get("status")
+        if status_value in dict(Expense.Status.choices):
+            qs = qs.filter(status=status_value)
+
+        # --- source フィルタ（csv_rakuten / csv_mitsui / manual） ---
+        source = params.get("source")
+        if source in dict(Expense.Source.choices):
+            qs = qs.filter(source=source)
+
+        # --- burden_type フィルタ（shared / wife_only / me_only） ---
+        burden_type = params.get("burden_type")
+        if burden_type in dict(Expense.BurdenType.choices):
+            qs = qs.filter(burden_type=burden_type)
+
+        # --- card_user フィルタ（me / wife / unknown） ---
+        card_user = params.get("card_user")
+        if card_user in dict(Expense.CardUser.choices):
+            qs = qs.filter(card_user=card_user)
+
+        # --- category フィルタ（food / travel など） ---
+        category = params.get("category")
+        if category in dict(Expense.Category.choices):
+            qs = qs.filter(category=category)
+
+        return qs
+
     def perform_create(self, serializer):
         """
         手入力で作成されたレコードは source を必ず 'manual' に固定。

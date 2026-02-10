@@ -11,6 +11,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
             "store",
             "card_user",
             "burden_type",
+            "category",
             "amount",
             "memo",
             "source",

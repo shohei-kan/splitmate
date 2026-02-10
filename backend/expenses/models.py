@@ -11,6 +11,15 @@ class Expense(models.Model):
         SHARED = "shared", "Shared"
         WIFE_ONLY = "wife_only", "Wife only"
         ME_ONLY = "me_only", "Me only"
+    
+    class Category(models.TextChoices):
+        UNCATEGORIZED = "uncategorized", "未分類"
+        FOOD = "food", "食費"
+        DAILY = "daily", "日用品"
+        OUTSIDE_FOOD = "outside_food", "外食"
+        UTILITY = "utility", "光熱費"
+        HOBBY = "travel", "旅行"
+        OTHER = "other", "その他"
 
     class Source(models.TextChoices):
         CSV_RAKUTEN = "csv_rakuten", "CSV (Rakuten)"
@@ -46,6 +55,12 @@ class Expense(models.Model):
         max_length=20,
         choices=BurdenType.choices,
         default=BurdenType.SHARED,
+    )
+
+    category = models.CharField(
+        max_length=32,
+        choices=Category.choices,
+        default=Category.UNCATEGORIZED,
     )
 
     amount = models.PositiveIntegerField()
