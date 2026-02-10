@@ -25,6 +25,7 @@ from expenses.views import (
     MitsuiCSVImportView,
     MonthStatusUpdateView,
     ExclusionRuleViewSet,
+    MonthlyCategorySummaryView,
 )
 
 router = routers.DefaultRouter()
@@ -35,6 +36,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include(router.urls)),
     path("api/summary/monthly/", MonthlySummaryView.as_view(), name="monthly-summary"),
+    path("api/summary/monthly-by-category/", MonthlyCategorySummaryView.as_view(), name="monthly-category-summary"),     
     path("api/import/rakuten/", RakutenCSVImportView.as_view(), name="import-rakuten"),
     path("api/import/mitsui/", MitsuiCSVImportView.as_view(), name="import-mitsui"),
     path("api/month/status/", MonthStatusUpdateView.as_view(), name="month-status"), 

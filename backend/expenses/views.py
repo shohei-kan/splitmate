@@ -2,7 +2,7 @@ import datetime
 import calendar
 
 from django.db.models import Sum
-from rest_framework import viewsets, filters, parsers, status
+from rest_framework import viewsets, filters, parsers, status, serializers
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
@@ -11,6 +11,7 @@ from .serializers import (
     ExpenseSerializer,
     MonthlySummarySerializer,
     MonthStatusUpdateSerializer,
+    MonthlyCategorySummarySerializer,
     ExclusionRuleSerializer,
     )
 from .importers import import_rakuten_csv, import_mitsui_csv
@@ -376,3 +377,103 @@ class MonthStatusUpdateView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class MonthlyCategorySummaryView(APIView):
+    """
+    GET /api/summary/monthly-by-category/?year=YYYY&month=MM&status=draft|final
+
+    指定した年月の支出をカテゴリ別に集計して返す。
+    status を指定すると draft/final でフィルタできる。
+    """
+
+    def get(self, request, *args, **kwargs):
+        today = datetime.date.today()
+        params = request.query_params
+
+        try:
+            year = int(params.get("year", today.year))
+            month = int(params.get("month", today.month))
+        except ValueError:
+            year = today.year
+            month = today.month
+
+        # 対象月の1日〜末日
+        first_day = datetime.date(year, month, 1)
+        if month == 12:
+            last_day = datetime.date(year + 1, 1, 1) - datetime.timedelta(days=1)
+        else:
+            last_day = datetime.date(year, month + 1, 1) - datetime.timedelta(days=1)
+
+        qs = Expense.objects.filter(date__gte=first_day, date__lte=last_day)
+
+        # draft/final で絞る（指定なしなら両方）
+        status_value = params.get("status")
+        if status_value in dict(Expense.Status.choices):
+            qs = qs.filter(status=status_value)
+        else:
+            status_value = None  # 応答用
+
+        # category × burden_type ごとの合計をまとめて1クエリで取得
+        rows = (
+            qs.values("category", "burden_type")
+            .annotate(total=Sum("amount"))
+            .order_by("category", "burden_type")
+        )
+
+        # カテゴリごとに合算
+        category_map = {}
+        for row in rows:
+            category = row["category"] or Expense.Category.UNCATEGORIZED
+            burden_type = row["burden_type"]
+            total = row["total"] or 0
+
+            if category not in category_map:
+                category_map[category] = {
+                    "shared_total": 0,
+                    "wife_only_total": 0,
+                    "me_only_total": 0,
+                }
+
+            if burden_type == Expense.BurdenType.SHARED:
+                category_map[category]["shared_total"] += total
+            elif burden_type == Expense.BurdenType.WIFE_ONLY:
+                category_map[category]["wife_only_total"] += total
+            elif burden_type == Expense.BurdenType.ME_ONLY:
+                category_map[category]["me_only_total"] += total
+
+        # Category TextChoices からラベル解決
+        category_label_map = {c.value: c.label for c in Expense.Category}
+
+        items = []
+        for category, data in category_map.items():
+            shared_total = data["shared_total"]
+            wife_only_total = data["wife_only_total"]
+            me_only_total = data["me_only_total"]
+            total = shared_total + wife_only_total + me_only_total
+
+            items.append(
+                {
+                    "category": category,
+                    "category_label": category_label_map.get(
+                        category, category
+                    ),
+                    "shared_total": shared_total,
+                    "wife_only_total": wife_only_total,
+                    "me_only_total": me_only_total,
+                    "total": total,
+                }
+            )
+
+        # カテゴリコード順でソートしておく（UI側で並べ替えてもOK）
+        items.sort(key=lambda x: x["category"])
+
+        summary = {
+            "year": year,
+            "month": month,
+            "status": status_value,
+            "items": items,
+        }
+
+        serializer = MonthlyCategorySummarySerializer(summary)
+        return Response(serializer.data)

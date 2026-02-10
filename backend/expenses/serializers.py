@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Expense, ExclusionRule
+from dataclasses import dataclass 
 import datetime  
 
 class ExpenseSerializer(serializers.ModelSerializer):
@@ -37,12 +38,22 @@ class MonthlySummarySerializer(serializers.Serializer):
     me_only_total = serializers.IntegerField()
     half = serializers.IntegerField()
     transfer_amount = serializers.IntegerField()
+    
+    
+class CategorySummaryItemSerializer(serializers.Serializer):
+    category = serializers.CharField()
+    category_label = serializers.CharField()
+    shared_total = serializers.IntegerField()
+    wife_only_total = serializers.IntegerField()
+    me_only_total = serializers.IntegerField()
+    total = serializers.IntegerField()
 
-import datetime  # もしまだ上に無ければ追加
 
-from rest_framework import serializers
-
-from .models import Expense
+class MonthlyCategorySummarySerializer(serializers.Serializer):
+    year = serializers.IntegerField()
+    month = serializers.IntegerField()
+    status = serializers.CharField(allow_null=True)
+    items = CategorySummaryItemSerializer(many=True)
 
 
 class MonthStatusUpdateSerializer(serializers.Serializer):
@@ -61,6 +72,7 @@ class MonthStatusUpdateSerializer(serializers.Serializer):
             raise serializers.ValidationError("year / month が不正です。")
 
         return attrs
+    
     
 class ExclusionRuleSerializer(serializers.ModelSerializer):
     class Meta:
