@@ -28,7 +28,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
             "updated_at"
         ]
 
-
+#月別サマリー
 class MonthlySummarySerializer(serializers.Serializer):
     year = serializers.IntegerField()
     month = serializers.IntegerField()
@@ -38,6 +38,24 @@ class MonthlySummarySerializer(serializers.Serializer):
     me_only_total = serializers.IntegerField()
     half = serializers.IntegerField()
     transfer_amount = serializers.IntegerField()
+
+
+class MonthlySummaryListItemSerializer(serializers.Serializer):
+    year = serializers.IntegerField()
+    month = serializers.IntegerField()
+    shared_total = serializers.IntegerField()
+    wife_shared = serializers.IntegerField()
+    wife_personal = serializers.IntegerField()
+    me_only_total = serializers.IntegerField()
+    half = serializers.IntegerField()
+    transfer_amount = serializers.IntegerField()
+
+#年別サマリー（１２ヶ月分のリスト）
+class MonthlySummaryListSerializer(serializers.Serializer):
+    year = serializers.IntegerField()
+    status = serializers.CharField(allow_null=True)
+    items = MonthlySummaryListItemSerializer(many=True)
+
     
     
 class CategorySummaryItemSerializer(serializers.Serializer):

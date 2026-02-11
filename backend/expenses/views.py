@@ -12,6 +12,7 @@ from .serializers import (
     MonthlySummarySerializer,
     MonthStatusUpdateSerializer,
     MonthlyCategorySummarySerializer,
+    MonthlySummaryListSerializer,
     ExclusionRuleSerializer,
     )
 from .importers import import_rakuten_csv, import_mitsui_csv
@@ -128,20 +129,8 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         """
         serializer.save(source=Expense.Source.MANUAL)
 
-#CSVの除外ワード用
-class ExclusionRuleViewSet(viewsets.ModelViewSet):
-    """
-    /api/exclusion-rules/ 用の CRUD.
-    """
 
-    queryset = ExclusionRule.objects.all()
-    serializer_class = ExclusionRuleSerializer
-
-    filter_backends = [filters.OrderingFilter, filters.SearchFilter]
-    ordering_fields = ["keyword", "created_at"]
-    ordering = ["keyword", "id"]
-    search_fields = ["keyword", "memo"]
-
+#月別サマリー
 class MonthlySummaryView(APIView):
     """
     GET /api/summary/monthly/?year=YYYY&month=MM[&status=draft|final]
@@ -233,7 +222,86 @@ class MonthlySummaryView(APIView):
         serializer = MonthlySummarySerializer(summary_data)
         return Response(serializer.data)
     
-    
+#年別サマリー
+class MonthlySummaryListView(APIView):
+    """
+    GET /api/summary/monthly-list/?year=YYYY&status=draft|final
+
+    指定した年の「1〜12月」の月次サマリを配列で返す。
+    status を指定すると draft/final でフィルタできる。
+    データがない月も 0 で返す。
+    """
+
+    def get(self, request, *args, **kwargs):
+        today = datetime.date.today()
+        params = request.query_params
+
+        try:
+            year = int(params.get("year", today.year))
+        except ValueError:
+            year = today.year
+
+        status_value = params.get("status")
+        if status_value not in dict(Expense.Status.choices):
+            status_value = None  # 不正な値は無視
+
+        items = []
+
+        for month in range(1, 13):
+            first_day = datetime.date(year, month, 1)
+            if month == 12:
+                last_day = datetime.date(year + 1, 1, 1) - datetime.timedelta(days=1)
+            else:
+                last_day = datetime.date(year, month + 1, 1) - datetime.timedelta(days=1)
+
+            qs = Expense.objects.filter(date__gte=first_day, date__lte=last_day)
+
+            if status_value:
+                qs = qs.filter(status=status_value)
+
+            shared_total = qs.filter(
+                burden_type=Expense.BurdenType.SHARED
+            ).aggregate(total=Sum("amount"))["total"] or 0
+
+            wife_shared = qs.filter(
+                burden_type=Expense.BurdenType.SHARED,
+                card_user=Expense.CardUser.WIFE,
+            ).aggregate(total=Sum("amount"))["total"] or 0
+
+            wife_personal = qs.filter(
+                burden_type=Expense.BurdenType.WIFE_ONLY
+            ).aggregate(total=Sum("amount"))["total"] or 0
+
+            me_only_total = qs.filter(
+                burden_type=Expense.BurdenType.ME_ONLY
+            ).aggregate(total=Sum("amount"))["total"] or 0
+
+            half = shared_total // 2
+            transfer_amount = half - wife_shared + wife_personal
+
+            items.append(
+                {
+                    "year": year,
+                    "month": month,
+                    "shared_total": shared_total,
+                    "wife_shared": wife_shared,
+                    "wife_personal": wife_personal,
+                    "me_only_total": me_only_total,
+                    "half": half,
+                    "transfer_amount": transfer_amount,
+                }
+            )
+
+        summary = {
+            "year": year,
+            "status": status_value,
+            "items": items,
+        }
+
+        serializer = MonthlySummaryListSerializer(summary)
+        return Response(serializer.data)
+
+
 class RakutenCSVImportView(APIView):
     """
     POST /api/import/rakuten/?card_user=me|wife
@@ -340,6 +408,20 @@ class MitsuiCSVImportView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+#CSVの除外ワード用
+class ExclusionRuleViewSet(viewsets.ModelViewSet):
+    """
+    /api/exclusion-rules/ 用の CRUD.
+    """
+
+    queryset = ExclusionRule.objects.all()
+    serializer_class = ExclusionRuleSerializer
+
+    filter_backends = [filters.OrderingFilter, filters.SearchFilter]
+    ordering_fields = ["keyword", "created_at"]
+    ordering = ["keyword", "id"]
+    search_fields = ["keyword", "memo"]
 
 
 class MonthStatusUpdateView(APIView):
