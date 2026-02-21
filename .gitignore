@@ -1,0 +1,32 @@
+# --- secrets ---
+.env
+.env.*
+!.env.example
+
+# --- python ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+
+# --- django ---
+*.log
+db.sqlite3
+media/
+
+# --- node / vite ---
+node_modules/
+dist/
+.vite/
+*.log
+
+# --- editor / os ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
