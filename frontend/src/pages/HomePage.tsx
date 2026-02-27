@@ -93,6 +93,7 @@ export function HomePage() {
           <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             <div>取得に失敗しました: {(error as Error).message}</div>
             <button
+              type="button"
               className="rounded-md bg-white px-2 py-1 text-xs font-medium text-red-700 border border-red-200 hover:bg-red-50"
               onClick={() => refetch()}
             >
@@ -107,6 +108,7 @@ export function HomePage() {
       {/* Month selector */}
       <div className="flex items-center justify-center gap-3">
         <button
+          type="button"
           className="w-10 h-10 rounded-full hover:bg-white border border-transparent hover:border-[#E0E0E0]"
           onClick={() => go(-1)}
           aria-label="prev month"
@@ -119,6 +121,7 @@ export function HomePage() {
         </div>
 
         <button
+          type="button"
           className="w-10 h-10 rounded-full hover:bg-white border border-transparent hover:border-[#E0E0E0]"
           onClick={() => go(1)}
           aria-label="next month"
@@ -127,10 +130,11 @@ export function HomePage() {
         </button>
 
         <button
+          type="button"
           className="ml-2 h-10 px-4 rounded-full bg-white border border-[#E0E0E0] hover:bg-[#F7FAFD] text-sm font-medium"
           onClick={goInitial}
           aria-label="back to default month"
-          title="初期表示（前月）に戻る"
+          title="当月に戻る"
         >
           今月
         </button>
@@ -273,6 +277,7 @@ export function HomePage() {
               </Field>
 
               <button
+                type="button"
                 className="w-full h-11 rounded-lg bg-[#1F8EED] text-white font-semibold disabled:opacity-50"
                 disabled={!canSubmit || createMut.isPending}
                 onClick={() => createMut.mutate()}
