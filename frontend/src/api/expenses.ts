@@ -1,4 +1,4 @@
-import type { Expense, CardUser, Payer, BurdenType, Category } from "./types";
+import type { Expense, CardUser, Payer, BurdenType, Category, Paginated  } from "./types";
 import { apiFetch } from "./client";
 
 export type CreateExpenseInput = {
@@ -20,4 +20,23 @@ export function createExpense(input: CreateExpenseInput) {
       memo: input.memo ?? "",
     }),
   });
+}
+
+export function fetchExpenses(params: {
+  dateGte: string; // YYYY-MM-DD
+  dateLte: string; // YYYY-MM-DD
+  ordering?: string; // ex: "-date"
+  search?: string;
+  page?: number; // optional
+}) {
+  const q = new URLSearchParams({
+    date_from: params.dateGte,
+    date_to: params.dateLte,
+    ordering: params.ordering ?? "-date",
+  });
+
+  if (params.search) q.set("search", params.search);
+  if (params.page) q.set("page", String(params.page));
+
+  return apiFetch<Paginated<Expense>>(`/api/expenses/?${q.toString()}`);
 }

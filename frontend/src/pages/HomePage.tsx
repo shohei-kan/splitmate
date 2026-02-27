@@ -1,106 +1,121 @@
+// frontend/src/pages/HomePage.tsx
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { fetchMonthlySummary } from "../api/summary";
-import { createExpense } from "../api/expenses";
-import type { CardUser, Payer, BurdenType, Category } from "../api/types";
+import { fetchExpenses } from "../api/expenses";
+import type { Expense } from "../api/types";
 import { getInitialYearMonth, shiftMonth } from "../lib/month";
 import { yen } from "../lib/format";
 
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function toISODate(d: Date) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function getMonthRangeISO(year: number, month: number) {
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 0); // 0日 = 前月末日
+  return { startISO: toISODate(start), endISO: toISODate(end) };
+}
+
+function labelCardUser(v: Expense["card_user"] | null | undefined) {
+  if (!v) return "—";
+  if (v === "me") return "私";
+  if (v === "wife") return "妻";
+  return "不明";
+}
+
+function labelBurdenType(v: Expense["burden_type"]) {
+  if (v === "shared") return "共有";
+  if (v === "wife_only") return "妻のみ";
+  return "私のみ";
+}
+
+function labelSource(v: Expense["source"]) {
+  if (v === "csv_rakuten") return "楽天CSV";
+  if (v === "csv_mitsui") return "三井CSV";
+  return "手入力";
+}
+
+function isHighAmount(amount: number, threshold = 10000) {
+  return amount >= threshold;
+}
+
 export function HomePage() {
-  const qc = useQueryClient();
-
+  // 初期表示は「当月」（前提：month.ts側を修正済み）
   const initial = useMemo(() => getInitialYearMonth(), []);
-  const [year, setYear] = useState(initial.year);
-  const [month, setMonth] = useState(initial.month);
+  const [targetYM, setTargetYM] = useState(initial);
 
-  const { data, isLoading, isFetching, error, refetch } = useQuery({
-    queryKey: ["summary", year, month],
-    queryFn: () => fetchMonthlySummary(year, month),
+  // 一覧ページ（とりあえず 1ページ目だけでOK。後で prev/next 作れる）
+  const [page, setPage] = useState(1);
+
+  const { startISO, endISO } = useMemo(
+    () => getMonthRangeISO(targetYM.year, targetYM.month),
+    [targetYM.year, targetYM.month]
+  );
+
+  const summaryQuery = useQuery({
+    queryKey: ["summary", targetYM.year, targetYM.month],
+    queryFn: () => fetchMonthlySummary(targetYM.year, targetYM.month),
   });
 
+  const expensesQuery = useQuery({
+    queryKey: ["expenses", targetYM.year, targetYM.month, page],
+    queryFn: () =>
+      fetchExpenses({
+        dateGte: startISO,
+        dateLte: endISO,
+        ordering: "-date",
+        page,
+      }),
+  });
+
+  const data = summaryQuery.data;
   const meShared = data ? data.shared_total - data.wife_shared : null;
   const showWifePersonal = (data?.wife_personal ?? 0) > 0;
 
   const go = (delta: number) => {
-    const r = shiftMonth(year, month, delta);
-    setYear(r.year);
-    setMonth(r.month);
+    setTargetYM((prev) => shiftMonth(prev.year, prev.month, delta));
+    setPage(1);
   };
 
   const goInitial = () => {
-    const r = getInitialYearMonth();
-    setYear(r.year);
-    setMonth(r.month);
+    setTargetYM(getInitialYearMonth());
+    setPage(1);
   };
 
-  // ---- Manual form state ----
-  const todayISO = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const [form, setForm] = useState({
-    date: todayISO,
-    store: "",
-    amount: "",
-    payer: "me" as Payer,
-    card_user: "unknown" as CardUser,
-    burden_type: "shared" as BurdenType,
-    category: "uncategorized" as Category,
-    memo: "",
-  });
+  const rows = expensesQuery.data?.results ?? [];
+  const totalCount = expensesQuery.data?.count ?? 0;
 
-  const canSubmit =
-    form.date.trim() !== "" &&
-    form.store.trim() !== "" &&
-    form.amount.trim() !== "" &&
-    Number(form.amount) > 0;
+  const anyError = summaryQuery.error || expensesQuery.error;
 
-  const createMut = useMutation({
-    mutationFn: () =>
-      createExpense({
-        date: form.date,
-        store: form.store.trim(),
-        amount: Number(form.amount),
-        payer: form.payer,
-        card_user: form.card_user,
-        burden_type: form.burden_type,
-        category: form.category,
-        memo: form.memo.trim() ? form.memo.trim() : undefined,
-      }),
-    onSuccess: async () => {
-      // サマリー更新
-      await qc.invalidateQueries({ queryKey: ["summary", year, month] });
-
-      // TODO: 一覧を作ったらこれも解放
-      // await qc.invalidateQueries({ queryKey: ["expenses", year, month] });
-
-      // フォームクリア（dateは維持）
-      setForm((prev) => ({
-        ...prev,
-        store: "",
-        amount: "",
-        memo: "",
-        card_user: "unknown",
-        burden_type: "shared",
-        category: "uncategorized",
-        payer: prev.payer, // payerは維持でもOK
-      }));
-    },
-  });
+  console.log("render YM:", targetYM);
 
   return (
     <div className="space-y-5">
       {/* Top status (loading/error) */}
       <div className="min-h-[20px]">
-        {error ? (
+        {anyError ? (
           <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            <div>取得に失敗しました: {(error as Error).message}</div>
+            <div>
+              取得に失敗しました:{" "}
+              {((summaryQuery.error || expensesQuery.error) as Error).message}
+            </div>
             <button
               type="button"
               className="rounded-md bg-white px-2 py-1 text-xs font-medium text-red-700 border border-red-200 hover:bg-red-50"
-              onClick={() => refetch()}
+              onClick={() => {
+                summaryQuery.refetch();
+                expensesQuery.refetch();
+              }}
             >
               再試行
             </button>
           </div>
-        ) : isLoading ? (
+        ) : summaryQuery.isLoading ? (
           <div className="text-sm text-[#6A7C8E]">読み込み中...</div>
         ) : null}
       </div>
@@ -117,7 +132,7 @@ export function HomePage() {
         </button>
 
         <div className="px-3 py-2 rounded-full bg-white border border-[#E0E0E0] text-base font-semibold">
-          {year}年{month}月
+          {targetYM.year}年{targetYM.month}月
         </div>
 
         <button
@@ -133,181 +148,160 @@ export function HomePage() {
           type="button"
           className="ml-2 h-10 px-4 rounded-full bg-white border border-[#E0E0E0] hover:bg-[#F7FAFD] text-sm font-medium"
           onClick={goInitial}
-          aria-label="back to default month"
+          aria-label="back to current month"
           title="当月に戻る"
         >
           今月
         </button>
 
-        {isFetching && !isLoading && (
-          <div className="ml-2 text-xs text-[#6A7C8E]">更新中...</div>
-        )}
+        {/* fetch中のさりげない表示 */}
+        {(summaryQuery.isFetching || expensesQuery.isFetching) &&
+          !(summaryQuery.isLoading || expensesQuery.isLoading) && (
+            <div className="ml-2 text-xs text-[#6A7C8E]">更新中...</div>
+          )}
       </div>
 
       {/* Summary cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Summary title="総支出（共有）" value={data ? yen(data.shared_total) : null} />
+
         <Summary title="私の共有支出" value={meShared !== null ? yen(meShared) : null} />
+
         <Summary title="妻の共有支出" value={data ? yen(data.wife_shared) : null} />
+
         {showWifePersonal && (
           <Summary title="妻の個人利用" value={data ? yen(data.wife_personal) : null} accent />
         )}
+
         <Summary title="折半額" value={data ? yen(data.half) : null} blue />
-        <Summary title="振込（妻→私）" value={data ? yen(data.transfer_amount) : null} blue />
+
+        <Summary
+          title="振込（妻→私）"
+          value={data ? yen(data.transfer_amount) : null}
+          blue
+        />
       </div>
 
-      {/* Manual form + table placeholder */}
+      {/* Main area: (Left) form placeholder + (Right) table */}
       <div className="grid gap-4 lg:grid-cols-12">
-        {/* Form */}
+        {/* Left: manual form placeholder */}
         <div className="lg:col-span-4">
-          <div className="bg-white border border-[#E0E0E0] rounded-xl p-5">
-            <div className="flex items-center justify-between">
-              <div className="text-base font-semibold">手入力で追加</div>
-              {createMut.isPending && (
-                <div className="text-xs text-[#6A7C8E]">登録中...</div>
-              )}
-            </div>
-
-            {createMut.isError && (
-              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                登録に失敗しました: {(createMut.error as Error).message}
-              </div>
-            )}
-
-            <div className="mt-4 space-y-3">
-              <Field label="日付">
-                <input
-                  type="date"
-                  className="w-full rounded-lg border border-[#E0E0E0] px-3 py-2 text-sm"
-                  value={form.date}
-                  onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))}
-                />
-              </Field>
-
-              <Field label="購入先">
-                <input
-                  className="w-full rounded-lg border border-[#E0E0E0] px-3 py-2 text-sm"
-                  placeholder="例）東京電力 / Amazon"
-                  value={form.store}
-                  onChange={(e) => setForm((p) => ({ ...p, store: e.target.value }))}
-                />
-              </Field>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="金額">
-                  <input
-                    inputMode="numeric"
-                    className="w-full rounded-lg border border-[#E0E0E0] px-3 py-2 text-sm"
-                    placeholder="例）12000"
-                    value={form.amount}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, amount: e.target.value.replace(/[^\d]/g, "") }))
-                    }
-                  />
-                </Field>
-
-                <Field label="支払者（精算）">
-                  <select
-                    className="w-full rounded-lg border border-[#E0E0E0] px-3 py-2 text-sm bg-white"
-                    value={form.payer}
-                    onChange={(e) => setForm((p) => ({ ...p, payer: e.target.value as Payer }))}
-                  >
-                    <option value="me">私</option>
-                    <option value="wife">妻</option>
-                    <option value="unknown">不明</option>
-                  </select>
-                </Field>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="カード利用者（参考）">
-                  <select
-                    className="w-full rounded-lg border border-[#E0E0E0] px-3 py-2 text-sm bg-white"
-                    value={form.card_user}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, card_user: e.target.value as CardUser }))
-                    }
-                  >
-                    <option value="unknown">不明</option>
-                    <option value="me">私</option>
-                    <option value="wife">妻</option>
-                  </select>
-                </Field>
-
-                <Field label="負担区分">
-                  <select
-                    className="w-full rounded-lg border border-[#E0E0E0] px-3 py-2 text-sm bg-white"
-                    value={form.burden_type}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, burden_type: e.target.value as BurdenType }))
-                    }
-                  >
-                    <option value="shared">共有</option>
-                    <option value="wife_only">妻のみ</option>
-                    <option value="me_only">私のみ</option>
-                  </select>
-                </Field>
-              </div>
-
-              <Field label="カテゴリ">
-                <select
-                  className="w-full rounded-lg border border-[#E0E0E0] px-3 py-2 text-sm bg-white"
-                  value={form.category}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, category: e.target.value as Category }))
-                  }
-                >
-                  <option value="uncategorized">未分類</option>
-                  <option value="food">食費</option>
-                  <option value="daily">日用品</option>
-                  <option value="outside_food">外食</option>
-                  <option value="utility">光熱費</option>
-                  <option value="travel">旅行</option>
-                  <option value="other">その他</option>
-                </select>
-              </Field>
-
-              <Field label="メモ">
-                <textarea
-                  className="w-full rounded-lg border border-[#E0E0E0] px-3 py-2 text-sm min-h-[80px]"
-                  placeholder="任意"
-                  value={form.memo}
-                  onChange={(e) => setForm((p) => ({ ...p, memo: e.target.value }))}
-                />
-              </Field>
-
-              <button
-                type="button"
-                className="w-full h-11 rounded-lg bg-[#1F8EED] text-white font-semibold disabled:opacity-50"
-                disabled={!canSubmit || createMut.isPending}
-                onClick={() => createMut.mutate()}
-              >
-                追加する
-              </button>
-
-              <div className="text-[11px] text-[#6A7C8E]">
-                ※「支払者（精算）」が精算ロジックに影響します。カード利用者は参考情報です。
-              </div>
+          <div className="rounded-xl border border-[#E0E0E0] bg-white p-5">
+            <div className="text-base font-semibold">支出を追加</div>
+            <div className="mt-3 rounded-lg border border-dashed border-[#B0C4D8] bg-white/50 p-6 text-sm text-[#6A7C8E]">
+              次：手入力フォーム（ここに配置）
             </div>
           </div>
         </div>
 
-        {/* Table placeholder */}
+        {/* Right: expenses table */}
         <div className="lg:col-span-8">
-          <div className="rounded-xl border border-dashed border-[#B0C4D8] bg-white/50 p-8 text-[#6A7C8E]">
-            次：支出一覧テーブル
+          <div className="rounded-xl border border-[#E0E0E0] bg-white">
+            <div className="flex items-center justify-between px-5 py-4">
+              <div>
+                <div className="text-base font-semibold">支出一覧</div>
+                <div className="mt-1 text-xs text-[#6A7C8E]">
+                  対象期間: {startISO} 〜 {endISO}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="text-xs text-[#6A7C8E]">{totalCount ? `${totalCount}件` : ""}</div>
+
+                <button
+                  type="button"
+                  className="h-9 px-3 rounded-lg bg-white border border-[#E0E0E0] hover:bg-[#F7FAFD] text-sm font-medium"
+                  onClick={() => expensesQuery.refetch()}
+                  disabled={expensesQuery.isFetching}
+                >
+                  更新
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-t border-b border-[#EEF4FA] bg-[#FAFCFF] text-[#6A7C8E]">
+                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">日付</th>
+                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">購入先</th>
+                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
+                      カード利用者
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">区分</th>
+                    <th className="px-4 py-3 text-right font-medium whitespace-nowrap">金額</th>
+                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">ソース</th>
+                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">メモ</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {expensesQuery.isLoading ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-[#6A7C8E]">
+                        読み込み中...
+                      </td>
+                    </tr>
+                  ) : rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-10 text-center text-[#6A7C8E]">
+                        データがありません
+                      </td>
+                    </tr>
+                  ) : (
+                    rows.map((e) => (
+                      <tr key={e.id} className="border-b border-[#EEF4FA] hover:bg-[#FAFCFF]">
+                        <td className="px-4 py-3 whitespace-nowrap">{e.date}</td>
+                        <td className="px-4 py-3 min-w-[180px]">{e.store}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">{labelCardUser(e.card_user)}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">{labelBurdenType(e.burden_type)}</td>
+                        <td
+                          className={`px-4 py-3 whitespace-nowrap text-right font-medium ${
+                            isHighAmount(e.amount) ? "text-red-600" : ""
+                          }`}
+                        >
+                          {yen(e.amount)}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">{labelSource(e.source)}</td>
+                        <td className="px-4 py-3 min-w-[200px] text-[#4B5B6A]">
+                          {e.memo || "—"}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination (optional minimal UI) */}
+            <div className="flex items-center justify-between px-5 py-4">
+              <div className="text-xs text-[#6A7C8E]">
+                ページ: {page}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="h-9 px-3 rounded-lg bg-white border border-[#E0E0E0] hover:bg-[#F7FAFD] text-sm font-medium disabled:opacity-50"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={!expensesQuery.data?.previous || expensesQuery.isFetching}
+                >
+                  前へ
+                </button>
+
+                <button
+                  type="button"
+                  className="h-9 px-3 rounded-lg bg-white border border-[#E0E0E0] hover:bg-[#F7FAFD] text-sm font-medium disabled:opacity-50"
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={!expensesQuery.data?.next || expensesQuery.isFetching}
+                >
+                  次へ
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="mb-1 text-xs font-medium text-[#6A7C8E]">{label}</div>
-      {children}
     </div>
   );
 }
@@ -319,7 +313,7 @@ function Summary({
   blue,
 }: {
   title: string;
-  value: string | null;
+  value: string | null; // null の時は skeleton 表示
   accent?: boolean;
   blue?: boolean;
 }) {

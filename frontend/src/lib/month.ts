@@ -5,7 +5,8 @@ export function getInitialYearMonth(): { year: number; month: number } {
 }
 
 export function shiftMonth(year: number, month: number, delta: number) {
-  const d = new Date(year, month - 1, 1);
-  d.setMonth(d.getMonth() + delta);
-  return { year: d.getFullYear(), month: d.getMonth() + 1 };
+  const totalMonths = year * 12 + (month - 1) + delta;
+  const nextYear = Math.floor(totalMonths / 12);
+  const nextMonth = (totalMonths % 12 + 12) % 12 + 1;
+  return { year: nextYear, month: nextMonth };
 }
