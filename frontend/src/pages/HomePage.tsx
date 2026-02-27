@@ -1,6 +1,7 @@
 // frontend/src/pages/HomePage.tsx
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { fetchMonthlySummary } from "../api/summary";
 import { fetchExpenses } from "../api/expenses";
 import type { Expense } from "../api/types";
@@ -45,9 +46,19 @@ function isHighAmount(amount: number, threshold = 10000) {
 }
 
 export function HomePage() {
-  // 初期表示は「当月」（前提：month.ts側を修正済み）
-  const initial = useMemo(() => getInitialYearMonth(), []);
-  const [targetYM, setTargetYM] = useState(initial);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const targetYM = useMemo(() => {
+    const yearParam = Number(searchParams.get("year"));
+    const monthParam = Number(searchParams.get("month"));
+    const hasValidYear = Number.isInteger(yearParam) && yearParam > 0;
+    const hasValidMonth = Number.isInteger(monthParam) && monthParam >= 1 && monthParam <= 12;
+
+    if (hasValidYear && hasValidMonth) {
+      return { year: yearParam, month: monthParam };
+    }
+
+    return getInitialYearMonth();
+  }, [searchParams]);
 
   // 一覧ページ（とりあえず 1ページ目だけでOK。後で prev/next 作れる）
   const [page, setPage] = useState(1);
@@ -78,12 +89,20 @@ export function HomePage() {
   const showWifePersonal = (data?.wife_personal ?? 0) > 0;
 
   const go = (delta: number) => {
-    setTargetYM((prev) => shiftMonth(prev.year, prev.month, delta));
+    const nextYM = shiftMonth(targetYM.year, targetYM.month, delta);
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.set("year", String(nextYM.year));
+    nextSearchParams.set("month", String(nextYM.month));
+    setSearchParams(nextSearchParams);
     setPage(1);
   };
 
   const goInitial = () => {
-    setTargetYM(getInitialYearMonth());
+    const nextYM = getInitialYearMonth();
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.set("year", String(nextYM.year));
+    nextSearchParams.set("month", String(nextYM.month));
+    setSearchParams(nextSearchParams);
     setPage(1);
   };
 
@@ -91,8 +110,6 @@ export function HomePage() {
   const totalCount = expensesQuery.data?.count ?? 0;
 
   const anyError = summaryQuery.error || expensesQuery.error;
-
-  console.log("render YM:", targetYM);
 
   return (
     <div className="space-y-5">
