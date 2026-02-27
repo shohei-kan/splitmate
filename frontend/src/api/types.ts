@@ -8,3 +8,33 @@ export interface MonthlySummary {
   half: number;
   transfer_amount: number;
 }
+
+export type CardUser = "me" | "wife" | "unknown";
+export type Payer = "me" | "wife" | "unknown"; // ✅ 一旦 CardUser と同じでOK
+export type BurdenType = "shared" | "wife_only" | "me_only";
+export type Status = "draft" | "final";
+
+export type Category =
+  | "uncategorized"
+  | "food"
+  | "daily"
+  | "outside_food"
+  | "utility"
+  | "travel"
+  | "other";
+
+export interface Expense {
+  id: number;
+  date: string;
+  store: string;
+  card_user: CardUser | null; // モデルがnull許容なので
+  payer: Payer;               // ✅ 追加
+  burden_type: BurdenType;
+  category: Category;
+  amount: number;
+  memo: string;
+  source: "csv_rakuten" | "csv_mitsui" | "manual";
+  status: Status;
+  created_at: string;
+  updated_at: string;
+}
