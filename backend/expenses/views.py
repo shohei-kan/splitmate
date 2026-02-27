@@ -2,7 +2,7 @@ import datetime
 import calendar
 
 from django.db.models import Sum
-from rest_framework import viewsets, filters, parsers, status, serializers
+from rest_framework import viewsets, filters, parsers, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 

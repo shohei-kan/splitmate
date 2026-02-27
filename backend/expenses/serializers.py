@@ -1,6 +1,5 @@
 from rest_framework import serializers
 from .models import Expense, ExclusionRule
-from dataclasses import dataclass 
 import datetime  
 
 class ExpenseSerializer(serializers.ModelSerializer):

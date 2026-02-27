@@ -1,7 +1,7 @@
 import csv
 import datetime
 import unicodedata
-from typing import IO, Dict, List, Tuple, Optional
+from typing import IO, Dict, List, Tuple
 
 from django.db import transaction
 
