@@ -10,6 +10,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
             "date",
             "store",
             "card_user",
+            "payer",
             "burden_type",
             "category",
             "amount",
