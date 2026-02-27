@@ -10,7 +10,7 @@ export interface MonthlySummary {
 }
 
 export type CardUser = "me" | "wife" | "unknown";
-export type Payer = "me" | "wife" | "unknown"; // ✅ 一旦 CardUser と同じでOK
+export type Payer = "me" | "wife" | "unknown";
 export type BurdenType = "shared" | "wife_only" | "me_only";
 export type Status = "draft" | "final";
 
@@ -27,8 +27,8 @@ export interface Expense {
   id: number;
   date: string;
   store: string;
-  card_user: CardUser | null; // モデルがnull許容なので
-  payer: Payer;               // ✅ 追加
+  card_user: CardUser | null;
+  payer: Payer;
   burden_type: BurdenType;
   category: Category;
   amount: number;

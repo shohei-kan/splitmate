@@ -1,4 +1,4 @@
-import type { Expense, CardUser, BurdenType, Category, Payer } from "./types";
+import type { Expense, CardUser, Payer, BurdenType, Category } from "./types";
 import { apiFetch } from "./client";
 
 export type CreateExpenseInput = {
@@ -6,7 +6,7 @@ export type CreateExpenseInput = {
   store: string;
   amount: number;
   card_user: CardUser; // unknown OK
-  payer: Payer;        // ✅ 追加
+  payer: Payer;        // ✅ 精算に効く
   burden_type: BurdenType;
   category: Category;
   memo?: string;
