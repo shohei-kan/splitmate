@@ -1,10 +1,22 @@
 // frontend/src/pages/HomePage.tsx
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
+
 import { fetchMonthlySummary } from "../api/summary";
-import { fetchExpenses } from "../api/expenses";
-import type { Expense } from "../api/types";
+import { fetchExpenses, createExpense } from "../api/expenses";
+import type {
+  Expense,
+  CardUser,
+  Payer,
+  BurdenType,
+  Category,
+} from "../api/types";
+
 import { getInitialYearMonth, shiftMonth } from "../lib/month";
 import { yen } from "../lib/format";
 
@@ -45,28 +57,34 @@ function isHighAmount(amount: number, threshold = 10000) {
   return amount >= threshold;
 }
 
+function clampYearMonth(year: number, month: number) {
+  const y = Number.isInteger(year) && year > 0 ? year : 0;
+  const m = Number.isInteger(month) && month >= 1 && month <= 12 ? month : 0;
+  return { y, m, ok: y > 0 && m > 0 };
+}
+
 export function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // URL の year/month を唯一のソースにする（状態ズレの温床を消す）
   const targetYM = useMemo(() => {
     const yearParam = Number(searchParams.get("year"));
     const monthParam = Number(searchParams.get("month"));
-    const hasValidYear = Number.isInteger(yearParam) && yearParam > 0;
-    const hasValidMonth = Number.isInteger(monthParam) && monthParam >= 1 && monthParam <= 12;
+    const { ok } = clampYearMonth(yearParam, monthParam);
 
-    if (hasValidYear && hasValidMonth) {
-      return { year: yearParam, month: monthParam };
-    }
-
-    return getInitialYearMonth();
+    if (ok) return { year: yearParam, month: monthParam };
+    return getInitialYearMonth(); // ここは「当月」を返す前提
   }, [searchParams]);
 
-  // 一覧ページ（とりあえず 1ページ目だけでOK。後で prev/next 作れる）
+  // 一覧ページ（ひとまず 1ページ目から。prev/next あり）
   const [page, setPage] = useState(1);
 
   const { startISO, endISO } = useMemo(
     () => getMonthRangeISO(targetYM.year, targetYM.month),
     [targetYM.year, targetYM.month]
   );
+
+  const queryClient = useQueryClient();
 
   const summaryQuery = useQuery({
     queryKey: ["summary", targetYM.year, targetYM.month],
@@ -77,8 +95,8 @@ export function HomePage() {
     queryKey: ["expenses", targetYM.year, targetYM.month, page],
     queryFn: () =>
       fetchExpenses({
-        dateGte: startISO,
-        dateLte: endISO,
+        dateFrom: startISO,
+        dateTo: endISO,
         ordering: "-date",
         page,
       }),
@@ -90,19 +108,19 @@ export function HomePage() {
 
   const go = (delta: number) => {
     const nextYM = shiftMonth(targetYM.year, targetYM.month, delta);
-    const nextSearchParams = new URLSearchParams(searchParams);
-    nextSearchParams.set("year", String(nextYM.year));
-    nextSearchParams.set("month", String(nextYM.month));
-    setSearchParams(nextSearchParams);
+    const next = new URLSearchParams(searchParams);
+    next.set("year", String(nextYM.year));
+    next.set("month", String(nextYM.month));
+    setSearchParams(next);
     setPage(1);
   };
 
   const goInitial = () => {
     const nextYM = getInitialYearMonth();
-    const nextSearchParams = new URLSearchParams(searchParams);
-    nextSearchParams.set("year", String(nextYM.year));
-    nextSearchParams.set("month", String(nextYM.month));
-    setSearchParams(nextSearchParams);
+    const next = new URLSearchParams(searchParams);
+    next.set("year", String(nextYM.year));
+    next.set("month", String(nextYM.month));
+    setSearchParams(next);
     setPage(1);
   };
 
@@ -110,6 +128,76 @@ export function HomePage() {
   const totalCount = expensesQuery.data?.count ?? 0;
 
   const anyError = summaryQuery.error || expensesQuery.error;
+
+  // -----------------------------
+  // 手入力フォーム
+  // -----------------------------
+  const [form, setForm] = useState<{
+    date: string;
+    store: string;
+    amount: string;
+    card_user: CardUser;
+    payer: Payer;
+    burden_type: BurdenType;
+    category: Category;
+    memo: string;
+  }>(() => ({
+    // 初期は「今日」でもいいけど、対象月の範囲に寄せるなら startISO でもOK
+    date: toISODate(new Date()),
+    store: "",
+    amount: "",
+    card_user: "unknown",
+    payer: "me",
+    burden_type: "shared",
+    category: "uncategorized",
+    memo: "",
+  }));
+
+  // targetYM が変わったとき、日付が対象月外になりがちなので、
+  // ここは「そのまま維持」にしてる（勝手に書き換えない）。
+  // もし「月切替したら日付も月初に寄せたい」なら後で仕様決めよう。
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const amount = Number(form.amount);
+      if (!form.store.trim()) throw new Error("購入先を入力してください");
+      if (!form.date) throw new Error("日付を入力してください");
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error("金額は 1 以上の数値で入力してください");
+      }
+
+      return createExpense({
+        date: form.date,
+        store: form.store.trim(),
+        amount,
+        card_user: form.card_user,
+        payer: form.payer,
+        burden_type: form.burden_type,
+        category: form.category,
+        memo: form.memo,
+      });
+    },
+    onSuccess: () => {
+      // 入力は軽くクリア（date は残す運用が楽）
+      setForm((p) => ({ ...p, store: "", amount: "", memo: "" }));
+
+      // summary / expenses を更新
+      queryClient.invalidateQueries({
+        queryKey: ["summary", targetYM.year, targetYM.month],
+      });
+      queryClient.invalidateQueries({
+        // page も含めてまとめて更新
+        queryKey: ["expenses", targetYM.year, targetYM.month],
+      });
+    },
+  });
+
+  const canSubmit =
+    !!form.store.trim() &&
+    !!form.date &&
+    !!form.amount &&
+    Number.isFinite(Number(form.amount)) &&
+    Number(form.amount) > 0;
 
   return (
     <div className="space-y-5">
@@ -187,7 +275,11 @@ export function HomePage() {
         <Summary title="妻の共有支出" value={data ? yen(data.wife_shared) : null} />
 
         {showWifePersonal && (
-          <Summary title="妻の個人利用" value={data ? yen(data.wife_personal) : null} accent />
+          <Summary
+            title="妻の個人利用"
+            value={data ? yen(data.wife_personal) : null}
+            accent
+          />
         )}
 
         <Summary title="折半額" value={data ? yen(data.half) : null} blue />
@@ -199,14 +291,140 @@ export function HomePage() {
         />
       </div>
 
-      {/* Main area: (Left) form placeholder + (Right) table */}
+      {/* Main area: (Left) manual form + (Right) table */}
       <div className="grid gap-4 lg:grid-cols-12">
-        {/* Left: manual form placeholder */}
+        {/* Left: manual form */}
         <div className="lg:col-span-4">
           <div className="rounded-xl border border-[#E0E0E0] bg-white p-5">
             <div className="text-base font-semibold">支出を追加</div>
-            <div className="mt-3 rounded-lg border border-dashed border-[#B0C4D8] bg-white/50 p-6 text-sm text-[#6A7C8E]">
-              次：手入力フォーム（ここに配置）
+            <div className="mt-1 text-xs text-[#6A7C8E]">
+              登録後、サマリーと一覧を自動更新します
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <div className="grid gap-2">
+                <label className="text-xs text-[#6A7C8E]">日付</label>
+                <input
+                  className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm"
+                  type="date"
+                  value={form.date}
+                  onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))}
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-xs text-[#6A7C8E]">購入先</label>
+                <input
+                  className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm"
+                  value={form.store}
+                  onChange={(e) => setForm((p) => ({ ...p, store: e.target.value }))}
+                  placeholder="例）Amazon / 東京電力"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-xs text-[#6A7C8E]">金額</label>
+                <input
+                  className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm"
+                  inputMode="numeric"
+                  value={form.amount}
+                  onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
+                  placeholder="例）12000"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-xs text-[#6A7C8E]">カード利用者</label>
+                <select
+                  className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm bg-white"
+                  value={form.card_user}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, card_user: e.target.value as CardUser }))
+                  }
+                >
+                  <option value="unknown">不明</option>
+                  <option value="me">私</option>
+                  <option value="wife">妻</option>
+                </select>
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-xs text-[#6A7C8E]">支払者（精算）</label>
+                <select
+                  className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm bg-white"
+                  value={form.payer}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, payer: e.target.value as Payer }))
+                  }
+                >
+                  <option value="me">私</option>
+                  <option value="wife">妻</option>
+                  <option value="unknown">不明</option>
+                </select>
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-xs text-[#6A7C8E]">負担区分</label>
+                <select
+                  className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm bg-white"
+                  value={form.burden_type}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, burden_type: e.target.value as BurdenType }))
+                  }
+                >
+                  <option value="shared">共有</option>
+                  <option value="wife_only">妻のみ</option>
+                  <option value="me_only">私のみ</option>
+                </select>
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-xs text-[#6A7C8E]">カテゴリ</label>
+                <select
+                  className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm bg-white"
+                  value={form.category}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, category: e.target.value as Category }))
+                  }
+                >
+                  <option value="uncategorized">未分類</option>
+                  <option value="food">食費</option>
+                  <option value="daily">日用品</option>
+                  <option value="outside_food">外食</option>
+                  <option value="utility">光熱費</option>
+                  <option value="travel">旅行</option>
+                  <option value="other">その他</option>
+                </select>
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-xs text-[#6A7C8E]">メモ</label>
+                <textarea
+                  className="min-h-[84px] rounded-lg border border-[#E0E0E0] px-3 py-2 text-sm"
+                  value={form.memo}
+                  onChange={(e) => setForm((p) => ({ ...p, memo: e.target.value }))}
+                  placeholder="任意"
+                />
+              </div>
+
+              {createMutation.error && (
+                <div className="text-sm text-red-600">
+                  登録に失敗: {(createMutation.error as Error).message}
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="mt-2 h-10 w-full rounded-lg bg-black text-white text-sm font-medium disabled:opacity-50"
+                disabled={!canSubmit || createMutation.isPending}
+                onClick={() => createMutation.mutate()}
+              >
+                {createMutation.isPending ? "登録中..." : "追加する"}
+              </button>
+
+              <div className="text-[11px] text-[#6A7C8E]">
+                ※ このフォームはあとで react-hook-form + zod に置き換え可能
+              </div>
             </div>
           </div>
         </div>
@@ -223,11 +441,13 @@ export function HomePage() {
               </div>
 
               <div className="flex items-center gap-3">
-                <div className="text-xs text-[#6A7C8E]">{totalCount ? `${totalCount}件` : ""}</div>
+                <div className="text-xs text-[#6A7C8E]">
+                  {totalCount ? `${totalCount}件` : ""}
+                </div>
 
                 <button
                   type="button"
-                  className="h-9 px-3 rounded-lg bg-white border border-[#E0E0E0] hover:bg-[#F7FAFD] text-sm font-medium"
+                  className="h-9 px-3 rounded-lg bg-white border border-[#E0E0E0] hover:bg-[#F7FAFD] text-sm font-medium disabled:opacity-50"
                   onClick={() => expensesQuery.refetch()}
                   disabled={expensesQuery.isFetching}
                 >
@@ -240,15 +460,27 @@ export function HomePage() {
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="border-t border-b border-[#EEF4FA] bg-[#FAFCFF] text-[#6A7C8E]">
-                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">日付</th>
-                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">購入先</th>
+                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
+                      日付
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
+                      購入先
+                    </th>
                     <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
                       カード利用者
                     </th>
-                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">区分</th>
-                    <th className="px-4 py-3 text-right font-medium whitespace-nowrap">金額</th>
-                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">ソース</th>
-                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">メモ</th>
+                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
+                      区分
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium whitespace-nowrap">
+                      金額
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
+                      ソース
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
+                      メモ
+                    </th>
                   </tr>
                 </thead>
 
@@ -270,8 +502,12 @@ export function HomePage() {
                       <tr key={e.id} className="border-b border-[#EEF4FA] hover:bg-[#FAFCFF]">
                         <td className="px-4 py-3 whitespace-nowrap">{e.date}</td>
                         <td className="px-4 py-3 min-w-[180px]">{e.store}</td>
-                        <td className="px-4 py-3 whitespace-nowrap">{labelCardUser(e.card_user)}</td>
-                        <td className="px-4 py-3 whitespace-nowrap">{labelBurdenType(e.burden_type)}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {labelCardUser(e.card_user)}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {labelBurdenType(e.burden_type)}
+                        </td>
                         <td
                           className={`px-4 py-3 whitespace-nowrap text-right font-medium ${
                             isHighAmount(e.amount) ? "text-red-600" : ""
@@ -290,11 +526,9 @@ export function HomePage() {
               </table>
             </div>
 
-            {/* Pagination (optional minimal UI) */}
+            {/* Pagination */}
             <div className="flex items-center justify-between px-5 py-4">
-              <div className="text-xs text-[#6A7C8E]">
-                ページ: {page}
-              </div>
+              <div className="text-xs text-[#6A7C8E]">ページ: {page}</div>
 
               <div className="flex items-center gap-2">
                 <button
@@ -316,6 +550,11 @@ export function HomePage() {
                 </button>
               </div>
             </div>
+
+            {/* Footer hint */}
+            <div className="px-5 pb-5 text-[11px] text-[#6A7C8E]">
+              金額が {yen(10000)} 以上は赤表示
+            </div>
           </div>
         </div>
       </div>
@@ -330,7 +569,7 @@ function Summary({
   blue,
 }: {
   title: string;
-  value: string | null; // null の時は skeleton 表示
+  value: string | null;
   accent?: boolean;
   blue?: boolean;
 }) {
