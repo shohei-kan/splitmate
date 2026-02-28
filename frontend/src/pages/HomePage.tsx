@@ -19,6 +19,7 @@ import type {
 
 import { getInitialYearMonth, shiftMonth } from "../lib/month";
 import { yen } from "../lib/format";
+import { DEFAULT_HIGHLIGHT_THRESHOLD, useSettings } from "../hooks/useSettings";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -78,6 +79,9 @@ export function HomePage() {
 
   // 一覧ページ（ひとまず 1ページ目から。prev/next あり）
   const [page, setPage] = useState(1);
+  const settingsQ = useSettings();
+  const highlightThreshold =
+    settingsQ.data?.highlight_threshold ?? DEFAULT_HIGHLIGHT_THRESHOLD;
 
   const { startISO, endISO } = useMemo(
     () => getMonthRangeISO(targetYM.year, targetYM.month),
@@ -510,7 +514,7 @@ export function HomePage() {
                         </td>
                         <td
                           className={`px-4 py-3 whitespace-nowrap text-right font-medium ${
-                            isHighAmount(e.amount) ? "text-red-600" : ""
+                            isHighAmount(e.amount, highlightThreshold) ? "text-red-600" : ""
                           }`}
                         >
                           {yen(e.amount)}
@@ -553,7 +557,7 @@ export function HomePage() {
 
             {/* Footer hint */}
             <div className="px-5 pb-5 text-[11px] text-[#6A7C8E]">
-              金額が {yen(10000)} 以上は赤表示
+              金額が {yen(highlightThreshold)} 以上は赤表示
             </div>
           </div>
         </div>
