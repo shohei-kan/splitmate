@@ -41,7 +41,7 @@ export function CsvImportPage() {
   const [cardUser, setCardUser] = useState<CardUser>("unknown");
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
-  const [openPickerSignal, setOpenPickerSignal] = useState(0);
+  const [openPicker, setOpenPicker] = useState<null | (() => void)>(null);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -92,7 +92,7 @@ export function CsvImportPage() {
             <select
               value={cardKind}
               onChange={(e) => setCardKind(e.target.value as CardKind)}
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || !!result}
               className="h-11 rounded-xl border border-[#D5E2EF] bg-white px-3 text-sm font-semibold"
             >
               <option value="rakuten">楽天カード</option>
@@ -107,7 +107,7 @@ export function CsvImportPage() {
             <select
               value={cardUser}
               onChange={(e) => setCardUser(e.target.value as CardUser)}
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || !!result}
               className="h-11 rounded-xl border border-[#D5E2EF] bg-white px-3 text-sm font-semibold"
             >
               <option value="me">me</option>
@@ -119,8 +119,8 @@ export function CsvImportPage() {
           <CsvDropzone
             file={file}
             onFile={setFile}
-            disabled={mutation.isPending}
-            openPickerSignal={openPickerSignal}
+            disabled={mutation.isPending || !!result}
+            registerOpenPicker={setOpenPicker}
           />
 
           <div className="rounded-xl border border-[#E3EAF3] bg-[#F3F7FC] p-3 text-sm font-medium text-[#334155]">
@@ -136,22 +136,29 @@ export function CsvImportPage() {
           {result && (
             <div className="rounded-xl border border-[#E3EAF3] p-3">
               <div className="mb-2 text-sm font-bold text-[#0A2D4D]">取り込み結果</div>
-              <div className="flex flex-wrap gap-2">
-                <Badge label="created" value={result.created} />
-                <Badge label="skipped" value={result.skipped} />
-                <Badge label="excluded" value={result.excluded_count} />
-                <Badge label="duplicate" value={result.duplicate_count} />
-              </div>
-              {result.excluded_samples && result.excluded_samples.length > 0 && (
-                <details className="mt-3">
-                  <summary className="cursor-pointer text-sm font-semibold text-[#0A2D4D]">
-                    excluded_samples を表示
-                  </summary>
-                  <pre className="mt-2 max-h-56 overflow-auto rounded-lg bg-[#F8FBFF] p-2 text-xs text-[#4B5B6A]">
-                    {JSON.stringify(result.excluded_samples, null, 2)}
-                  </pre>
-                </details>
-              )}
+              {(() => {
+                const samples = result.excluded_samples?.slice(0, 10) ?? [];
+                return (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge label="created" value={result.created} />
+                      <Badge label="skipped" value={result.skipped} />
+                      <Badge label="excluded" value={result.excluded_count} />
+                      <Badge label="duplicate" value={result.duplicate_count} />
+                    </div>
+                    {samples.length > 0 && (
+                      <details className="mt-3">
+                        <summary className="cursor-pointer text-sm font-semibold text-[#0A2D4D]">
+                          excluded_samples を表示
+                        </summary>
+                        <pre className="mt-2 max-h-56 overflow-auto rounded-lg bg-[#F8FBFF] p-2 text-xs text-[#4B5B6A]">
+                          {JSON.stringify(samples, null, 2)}
+                        </pre>
+                      </details>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -166,7 +173,7 @@ export function CsvImportPage() {
               onClick={() => {
                 setFile(null);
                 setResult(null);
-                setOpenPickerSignal((v) => v + 1);
+                setTimeout(() => openPicker?.(), 0);
               }}
             >
               続けて取り込む

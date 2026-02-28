@@ -5,10 +5,10 @@ type Props = {
   file: File | null;
   onFile: (file: File | null) => void;
   disabled?: boolean;
-  openPickerSignal?: number;
+  registerOpenPicker?: (fn: () => void) => void;
 };
 
-export function CsvDropzone({ file, onFile, disabled, openPickerSignal }: Props) {
+export function CsvDropzone({ file, onFile, disabled, registerOpenPicker }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -19,11 +19,8 @@ export function CsvDropzone({ file, onFile, disabled, openPickerSignal }: Props)
   };
 
   useEffect(() => {
-    if (!openPickerSignal || disabled) return;
-    if (!inputRef.current) return;
-    inputRef.current.value = "";
-    inputRef.current.click();
-  }, [openPickerSignal, disabled]);
+    registerOpenPicker?.(openPicker);
+  }, [registerOpenPicker]);
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
