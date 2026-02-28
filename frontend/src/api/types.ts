@@ -45,3 +45,13 @@ export type Paginated<T> = {
   previous: string | null;
   results: T[];
 };
+
+
+
+export type ImportResult = {
+  created: number;
+  skipped: number;
+  excluded_count: number;
+  duplicate_count: number;
+  excluded_samples?: Array<unknown>;
+};

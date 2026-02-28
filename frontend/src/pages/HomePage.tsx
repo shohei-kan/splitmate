@@ -19,6 +19,7 @@ import type {
 
 import { getInitialYearMonth, shiftMonth } from "../lib/month";
 import { yen } from "../lib/format";
+import { CsvImportPanel } from "../components/import/CsvImportPanel";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -199,6 +200,11 @@ export function HomePage() {
     Number.isFinite(Number(form.amount)) &&
     Number(form.amount) > 0;
 
+  const importInvalidateKeys: Array<unknown[]> = [
+    ["summary", targetYM.year, targetYM.month],
+    ["expenses", targetYM.year, targetYM.month],
+  ];
+
   return (
     <div className="space-y-5">
       {/* Top status (loading/error) */}
@@ -295,137 +301,141 @@ export function HomePage() {
       <div className="grid gap-4 lg:grid-cols-12">
         {/* Left: manual form */}
         <div className="lg:col-span-4">
-          <div className="rounded-xl border border-[#E0E0E0] bg-white p-5">
-            <div className="text-base font-semibold">支出を追加</div>
-            <div className="mt-1 text-xs text-[#6A7C8E]">
-              登録後、サマリーと一覧を自動更新します
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <div className="grid gap-2">
-                <label className="text-xs text-[#6A7C8E]">日付</label>
-                <input
-                  className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm"
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))}
-                />
+          <div className="space-y-4">
+            <div className="rounded-xl border border-[#E0E0E0] bg-white p-5">
+              <div className="text-base font-semibold">支出を追加</div>
+              <div className="mt-1 text-xs text-[#6A7C8E]">
+                登録後、サマリーと一覧を自動更新します
               </div>
 
-              <div className="grid gap-2">
-                <label className="text-xs text-[#6A7C8E]">購入先</label>
-                <input
-                  className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm"
-                  value={form.store}
-                  onChange={(e) => setForm((p) => ({ ...p, store: e.target.value }))}
-                  placeholder="例）Amazon / 東京電力"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <label className="text-xs text-[#6A7C8E]">金額</label>
-                <input
-                  className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm"
-                  inputMode="numeric"
-                  value={form.amount}
-                  onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
-                  placeholder="例）12000"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <label className="text-xs text-[#6A7C8E]">カード利用者</label>
-                <select
-                  className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm bg-white"
-                  value={form.card_user}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, card_user: e.target.value as CardUser }))
-                  }
-                >
-                  <option value="unknown">不明</option>
-                  <option value="me">私</option>
-                  <option value="wife">妻</option>
-                </select>
-              </div>
-
-              <div className="grid gap-2">
-                <label className="text-xs text-[#6A7C8E]">支払者（精算）</label>
-                <select
-                  className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm bg-white"
-                  value={form.payer}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, payer: e.target.value as Payer }))
-                  }
-                >
-                  <option value="me">私</option>
-                  <option value="wife">妻</option>
-                  <option value="unknown">不明</option>
-                </select>
-              </div>
-
-              <div className="grid gap-2">
-                <label className="text-xs text-[#6A7C8E]">負担区分</label>
-                <select
-                  className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm bg-white"
-                  value={form.burden_type}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, burden_type: e.target.value as BurdenType }))
-                  }
-                >
-                  <option value="shared">共有</option>
-                  <option value="wife_only">妻のみ</option>
-                  <option value="me_only">私のみ</option>
-                </select>
-              </div>
-
-              <div className="grid gap-2">
-                <label className="text-xs text-[#6A7C8E]">カテゴリ</label>
-                <select
-                  className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm bg-white"
-                  value={form.category}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, category: e.target.value as Category }))
-                  }
-                >
-                  <option value="uncategorized">未分類</option>
-                  <option value="food">食費</option>
-                  <option value="daily">日用品</option>
-                  <option value="outside_food">外食</option>
-                  <option value="utility">光熱費</option>
-                  <option value="travel">旅行</option>
-                  <option value="other">その他</option>
-                </select>
-              </div>
-
-              <div className="grid gap-2">
-                <label className="text-xs text-[#6A7C8E]">メモ</label>
-                <textarea
-                  className="min-h-[84px] rounded-lg border border-[#E0E0E0] px-3 py-2 text-sm"
-                  value={form.memo}
-                  onChange={(e) => setForm((p) => ({ ...p, memo: e.target.value }))}
-                  placeholder="任意"
-                />
-              </div>
-
-              {createMutation.error && (
-                <div className="text-sm text-red-600">
-                  登録に失敗: {(createMutation.error as Error).message}
+              <div className="mt-4 space-y-3">
+                <div className="grid gap-2">
+                  <label className="text-xs text-[#6A7C8E]">日付</label>
+                  <input
+                    className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm"
+                    type="date"
+                    value={form.date}
+                    onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))}
+                  />
                 </div>
-              )}
 
-              <button
-                type="button"
-                className="mt-2 h-10 w-full rounded-lg bg-black text-white text-sm font-medium disabled:opacity-50"
-                disabled={!canSubmit || createMutation.isPending}
-                onClick={() => createMutation.mutate()}
-              >
-                {createMutation.isPending ? "登録中..." : "追加する"}
-              </button>
+                <div className="grid gap-2">
+                  <label className="text-xs text-[#6A7C8E]">購入先</label>
+                  <input
+                    className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm"
+                    value={form.store}
+                    onChange={(e) => setForm((p) => ({ ...p, store: e.target.value }))}
+                    placeholder="例）Amazon / 東京電力"
+                  />
+                </div>
 
-              <div className="text-[11px] text-[#6A7C8E]">
-                ※ このフォームはあとで react-hook-form + zod に置き換え可能
+                <div className="grid gap-2">
+                  <label className="text-xs text-[#6A7C8E]">金額</label>
+                  <input
+                    className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm"
+                    inputMode="numeric"
+                    value={form.amount}
+                    onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
+                    placeholder="例）12000"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <label className="text-xs text-[#6A7C8E]">カード利用者</label>
+                  <select
+                    className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm bg-white"
+                    value={form.card_user}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, card_user: e.target.value as CardUser }))
+                    }
+                  >
+                    <option value="unknown">不明</option>
+                    <option value="me">私</option>
+                    <option value="wife">妻</option>
+                  </select>
+                </div>
+
+                <div className="grid gap-2">
+                  <label className="text-xs text-[#6A7C8E]">支払者（精算）</label>
+                  <select
+                    className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm bg-white"
+                    value={form.payer}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, payer: e.target.value as Payer }))
+                    }
+                  >
+                    <option value="me">私</option>
+                    <option value="wife">妻</option>
+                    <option value="unknown">不明</option>
+                  </select>
+                </div>
+
+                <div className="grid gap-2">
+                  <label className="text-xs text-[#6A7C8E]">負担区分</label>
+                  <select
+                    className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm bg-white"
+                    value={form.burden_type}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, burden_type: e.target.value as BurdenType }))
+                    }
+                  >
+                    <option value="shared">共有</option>
+                    <option value="wife_only">妻のみ</option>
+                    <option value="me_only">私のみ</option>
+                  </select>
+                </div>
+
+                <div className="grid gap-2">
+                  <label className="text-xs text-[#6A7C8E]">カテゴリ</label>
+                  <select
+                    className="h-10 rounded-lg border border-[#E0E0E0] px-3 text-sm bg-white"
+                    value={form.category}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, category: e.target.value as Category }))
+                    }
+                  >
+                    <option value="uncategorized">未分類</option>
+                    <option value="food">食費</option>
+                    <option value="daily">日用品</option>
+                    <option value="outside_food">外食</option>
+                    <option value="utility">光熱費</option>
+                    <option value="travel">旅行</option>
+                    <option value="other">その他</option>
+                  </select>
+                </div>
+
+                <div className="grid gap-2">
+                  <label className="text-xs text-[#6A7C8E]">メモ</label>
+                  <textarea
+                    className="min-h-[84px] rounded-lg border border-[#E0E0E0] px-3 py-2 text-sm"
+                    value={form.memo}
+                    onChange={(e) => setForm((p) => ({ ...p, memo: e.target.value }))}
+                    placeholder="任意"
+                  />
+                </div>
+
+                {createMutation.error && (
+                  <div className="text-sm text-red-600">
+                    登録に失敗: {(createMutation.error as Error).message}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  className="mt-2 h-10 w-full rounded-lg bg-black text-white text-sm font-medium disabled:opacity-50"
+                  disabled={!canSubmit || createMutation.isPending}
+                  onClick={() => createMutation.mutate()}
+                >
+                  {createMutation.isPending ? "登録中..." : "追加する"}
+                </button>
+
+                <div className="text-[11px] text-[#6A7C8E]">
+                  ※ このフォームはあとで react-hook-form + zod に置き換え可能
+                </div>
               </div>
             </div>
+
+            <CsvImportPanel invalidateKeys={importInvalidateKeys} />
           </div>
         </div>
 
