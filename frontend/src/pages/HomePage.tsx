@@ -19,7 +19,6 @@ import type {
 
 import { getInitialYearMonth, shiftMonth } from "../lib/month";
 import { yen } from "../lib/format";
-import { CsvImportPanel } from "../components/import/CsvImportPanel";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -200,11 +199,6 @@ export function HomePage() {
     Number.isFinite(Number(form.amount)) &&
     Number(form.amount) > 0;
 
-  const importInvalidateKeys: Array<unknown[]> = [
-    ["summary", targetYM.year, targetYM.month],
-    ["expenses", targetYM.year, targetYM.month],
-  ];
-
   return (
     <div className="space-y-5">
       {/* Top status (loading/error) */}
@@ -301,8 +295,7 @@ export function HomePage() {
       <div className="grid gap-4 lg:grid-cols-12">
         {/* Left: manual form */}
         <div className="lg:col-span-4">
-          <div className="space-y-4">
-            <div className="rounded-xl border border-[#E0E0E0] bg-white p-5">
+          <div className="rounded-xl border border-[#E0E0E0] bg-white p-5">
               <div className="text-base font-semibold">支出を追加</div>
               <div className="mt-1 text-xs text-[#6A7C8E]">
                 登録後、サマリーと一覧を自動更新します
@@ -433,9 +426,6 @@ export function HomePage() {
                   ※ このフォームはあとで react-hook-form + zod に置き換え可能
                 </div>
               </div>
-            </div>
-
-            <CsvImportPanel invalidateKeys={importInvalidateKeys} />
           </div>
         </div>
 
