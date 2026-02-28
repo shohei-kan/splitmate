@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { updateSettings } from "../api/settings";
+import { syncAllSourceExclusionRules } from "../api/exclusionRules";
 import { DEFAULT_HIGHLIGHT_THRESHOLD, useSettings } from "../hooks/useSettings";
 
 function toTextarea(words: string[]) {
@@ -46,7 +47,11 @@ export function SettingsPage() {
   );
 
   const saveMut = useMutation({
-    mutationFn: () => updateSettings(currentInput),
+    mutationFn: async () => {
+      const saved = await updateSettings(currentInput);
+      await syncAllSourceExclusionRules(currentInput.excluded_words);
+      return saved;
+    },
     onSuccess: (saved) => {
       qc.setQueryData(["settings"], saved);
       setExcludedWordsDraft(null);

@@ -55,3 +55,13 @@ export type ImportResult = {
   duplicate_count: number;
   excluded_samples?: Array<unknown>;
 };
+
+export type ExclusionRule = {
+  id: number;
+  keyword: string;
+  target_source: "all" | "csv_rakuten" | "csv_mitsui";
+  is_active: boolean;
+  memo: string;
+  created_at: string;
+  updated_at: string;
+};

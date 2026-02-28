@@ -4,6 +4,7 @@ import unicodedata
 from typing import IO, Dict, List, Tuple
 
 from django.db import transaction
+from django.db.models import Q
 
 from .models import Expense, ExclusionRule
 
@@ -85,10 +86,10 @@ def _normalize_text(value: str) -> str:
 
 
 def _load_exclusion_rules(source: str) -> List[ExclusionRule]:
-    # ここは今ある実装のままでOKならそのまま使っていい
+    # source 固有ルール + all ルールを対象にする
     return list(
         ExclusionRule.objects.filter(
-            target_source=source,
+            Q(target_source=source) | Q(target_source=ExclusionRule.TargetSource.ALL),
             is_active=True,
         )
     )

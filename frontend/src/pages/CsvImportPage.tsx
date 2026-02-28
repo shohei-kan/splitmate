@@ -41,6 +41,7 @@ export function CsvImportPage() {
   const [cardUser, setCardUser] = useState<CardUser>("unknown");
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [openPickerSignal, setOpenPickerSignal] = useState(0);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -115,7 +116,12 @@ export function CsvImportPage() {
             </select>
           </div>
 
-          <CsvDropzone file={file} onFile={setFile} disabled={mutation.isPending} />
+          <CsvDropzone
+            file={file}
+            onFile={setFile}
+            disabled={mutation.isPending}
+            openPickerSignal={openPickerSignal}
+          />
 
           <div className="rounded-xl border border-[#E3EAF3] bg-[#F3F7FC] p-3 text-sm font-medium text-[#334155]">
             ※ 取り込み後は、ホームで当月のサマリーと一覧が更新されます。
@@ -152,21 +158,46 @@ export function CsvImportPage() {
       </div>
 
       <div className="flex justify-end gap-3">
-        <button
-          type="button"
-          className="h-11 rounded-xl border border-[#C7D6E6] bg-white px-5 text-sm font-bold text-[#0A2D4D]"
-          onClick={() => nav("/")}
-        >
-          キャンセル
-        </button>
-        <button
-          type="button"
-          className="h-11 rounded-xl bg-[#2563EB] px-6 text-sm font-black text-white disabled:opacity-60"
-          onClick={() => mutation.mutate()}
-          disabled={!file || mutation.isPending}
-        >
-          {mutation.isPending ? "インポート中..." : "インポート"}
-        </button>
+        {result ? (
+          <>
+            <button
+              type="button"
+              className="h-11 rounded-xl border border-[#C7D6E6] bg-white px-5 text-sm font-bold text-[#0A2D4D]"
+              onClick={() => {
+                setFile(null);
+                setResult(null);
+                setOpenPickerSignal((v) => v + 1);
+              }}
+            >
+              続けて取り込む
+            </button>
+            <button
+              type="button"
+              className="h-11 rounded-xl bg-[#2563EB] px-6 text-sm font-black text-white"
+              onClick={() => nav("/")}
+            >
+              ホームに戻る
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="h-11 rounded-xl border border-[#C7D6E6] bg-white px-5 text-sm font-bold text-[#0A2D4D]"
+              onClick={() => nav("/")}
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              className="h-11 rounded-xl bg-[#2563EB] px-6 text-sm font-black text-white disabled:opacity-60"
+              onClick={() => mutation.mutate()}
+              disabled={!file || mutation.isPending}
+            >
+              {mutation.isPending ? "インポート中..." : "インポート"}
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

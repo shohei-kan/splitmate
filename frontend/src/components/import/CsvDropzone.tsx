@@ -1,17 +1,29 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, DragEvent } from "react";
 
 type Props = {
   file: File | null;
   onFile: (file: File | null) => void;
   disabled?: boolean;
+  openPickerSignal?: number;
 };
 
-export function CsvDropzone({ file, onFile, disabled }: Props) {
+export function CsvDropzone({ file, onFile, disabled, openPickerSignal }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  const openPicker = () => inputRef.current?.click();
+  const openPicker = () => {
+    if (!inputRef.current) return;
+    inputRef.current.value = "";
+    inputRef.current.click();
+  };
+
+  useEffect(() => {
+    if (!openPickerSignal || disabled) return;
+    if (!inputRef.current) return;
+    inputRef.current.value = "";
+    inputRef.current.click();
+  }, [openPickerSignal, disabled]);
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
