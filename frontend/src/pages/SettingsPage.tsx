@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { updateSettings } from "../api/settings";
 import { syncAllSourceExclusionRules } from "../api/exclusionRules";
 import { DEFAULT_HIGHLIGHT_THRESHOLD, useSettings } from "../hooks/useSettings";
+import { qk } from "../lib/queryKeys";
 
 function toTextarea(words: string[]) {
   return (words ?? []).join("\n");
@@ -53,7 +54,7 @@ export function SettingsPage() {
       return saved;
     },
     onSuccess: (saved) => {
-      qc.setQueryData(["settings"], saved);
+      qc.setQueryData(qk.settings(), saved);
       setExcludedWordsDraft(null);
       setThresholdDraft(null);
       nav("/");

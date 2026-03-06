@@ -5,6 +5,7 @@ import { getInitialYearMonth, shiftMonth } from "../lib/month";
 import { importMitsuiCsv, importRakutenCsv } from "../api/import";
 import type { CardUser, ImportResult } from "../api/types";
 import { CsvDropzone } from "../components/import/CsvDropzone";
+import { qk } from "../lib/queryKeys";
 
 type CardKind = "rakuten" | "mitsui";
 
@@ -51,8 +52,8 @@ export function CsvImportPage() {
     },
     onSuccess: async (res) => {
       setResult(res);
-      await qc.invalidateQueries({ queryKey: ["summary"] });
-      await qc.invalidateQueries({ queryKey: ["expenses"] });
+      await qc.invalidateQueries({ queryKey: qk.summaryMonth(ym.year, ym.month) });
+      await qc.invalidateQueries({ queryKey: qk.expensesMonth(ym.year, ym.month) });
     },
   });
 

@@ -20,6 +20,7 @@ import type {
 import { getInitialYearMonth, shiftMonth } from "../lib/month";
 import { yen } from "../lib/format";
 import { DEFAULT_HIGHLIGHT_THRESHOLD, useSettings } from "../hooks/useSettings";
+import { qk } from "../lib/queryKeys";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -96,13 +97,13 @@ export function HomePage() {
   const queryClient = useQueryClient();
 
   const summaryQuery = useQuery({
-    queryKey: ["summary", targetYM.year, targetYM.month],
+    queryKey: qk.summaryMonth(targetYM.year, targetYM.month),
     queryFn: () => fetchMonthlySummary(targetYM.year, targetYM.month),
     refetchOnMount: "always",
   });
 
   const expensesQuery = useQuery({
-    queryKey: ["expenses", targetYM.year, targetYM.month, page],
+    queryKey: qk.expensesMonthPage(targetYM.year, targetYM.month, page),
     queryFn: () =>
       fetchExpenses({
         dateFrom: startISO,
@@ -193,13 +194,12 @@ export function HomePage() {
       setForm((p) => ({ ...p, store: "", amount: "", memo: "" }));
 
       // summary / expenses を更新
-      queryClient.invalidateQueries({
-        queryKey: ["summary", targetYM.year, targetYM.month],
-      });
-      queryClient.invalidateQueries({
-        // page も含めてまとめて更新
-        queryKey: ["expenses", targetYM.year, targetYM.month],
-      });
+    queryClient.invalidateQueries({
+      queryKey: qk.summaryMonth(targetYM.year, targetYM.month),
+    });
+    queryClient.invalidateQueries({
+      queryKey: qk.expensesMonth(targetYM.year, targetYM.month),
+    });
     },
   });
 
