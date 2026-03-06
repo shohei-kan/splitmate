@@ -64,6 +64,11 @@ function clampYearMonth(year: number, month: number) {
   return { y, m, ok: y > 0 && m > 0 };
 }
 
+function parsePage(value: string | null) {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : 1;
+}
+
 export function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -77,8 +82,8 @@ export function HomePage() {
     return getInitialYearMonth(); // ここは「当月」を返す前提
   }, [searchParams]);
 
-  // 一覧ページ（ひとまず 1ページ目から。prev/next あり）
-  const [page, setPage] = useState(1);
+  // 一覧ページ（URLクエリをソースにして戻った時の状態を一貫させる）
+  const page = useMemo(() => parsePage(searchParams.get("page")), [searchParams]);
   const settingsQ = useSettings();
   const highlightThreshold =
     settingsQ.data?.highlight_threshold ?? DEFAULT_HIGHLIGHT_THRESHOLD;
@@ -93,6 +98,7 @@ export function HomePage() {
   const summaryQuery = useQuery({
     queryKey: ["summary", targetYM.year, targetYM.month],
     queryFn: () => fetchMonthlySummary(targetYM.year, targetYM.month),
+    refetchOnMount: "always",
   });
 
   const expensesQuery = useQuery({
@@ -104,6 +110,7 @@ export function HomePage() {
         ordering: "-date",
         page,
       }),
+    refetchOnMount: "always",
   });
 
   const data = summaryQuery.data;
@@ -115,8 +122,8 @@ export function HomePage() {
     const next = new URLSearchParams(searchParams);
     next.set("year", String(nextYM.year));
     next.set("month", String(nextYM.month));
+    next.set("page", "1");
     setSearchParams(next);
-    setPage(1);
   };
 
   const goInitial = () => {
@@ -124,8 +131,8 @@ export function HomePage() {
     const next = new URLSearchParams(searchParams);
     next.set("year", String(nextYM.year));
     next.set("month", String(nextYM.month));
+    next.set("page", "1");
     setSearchParams(next);
-    setPage(1);
   };
 
   const rows = expensesQuery.data?.results ?? [];
@@ -538,7 +545,11 @@ export function HomePage() {
                 <button
                   type="button"
                   className="h-9 px-3 rounded-lg bg-white border border-[#E0E0E0] hover:bg-[#F7FAFD] text-sm font-medium disabled:opacity-50"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  onClick={() => {
+                    const next = new URLSearchParams(searchParams);
+                    next.set("page", String(Math.max(1, page - 1)));
+                    setSearchParams(next);
+                  }}
                   disabled={!expensesQuery.data?.previous || expensesQuery.isFetching}
                 >
                   前へ
@@ -547,7 +558,11 @@ export function HomePage() {
                 <button
                   type="button"
                   className="h-9 px-3 rounded-lg bg-white border border-[#E0E0E0] hover:bg-[#F7FAFD] text-sm font-medium disabled:opacity-50"
-                  onClick={() => setPage((p) => p + 1)}
+                  onClick={() => {
+                    const next = new URLSearchParams(searchParams);
+                    next.set("page", String(page + 1));
+                    setSearchParams(next);
+                  }}
                   disabled={!expensesQuery.data?.next || expensesQuery.isFetching}
                 >
                   次へ

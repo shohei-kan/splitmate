@@ -335,15 +335,21 @@ class RakutenCSVImportView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        (
-            created,
-            skipped,
-            excluded_samples,
-            excluded_count,
-            duplicate_count,
-        ) = import_rakuten_csv(
-            file, default_card_user=default_card_user
-        )
+        try:
+            (
+                created,
+                skipped,
+                excluded_samples,
+                excluded_count,
+                duplicate_count,
+            ) = import_rakuten_csv(
+                file, default_card_user=default_card_user
+            )
+        except ValueError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         return Response(
             {
@@ -388,13 +394,19 @@ class MitsuiCSVImportView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        (
-            created,
-            skipped,
-            excluded_samples,
-            excluded_count,
-            duplicate_count,
-        ) = import_mitsui_csv(file, card_user=card_user)
+        try:
+            (
+                created,
+                skipped,
+                excluded_samples,
+                excluded_count,
+                duplicate_count,
+            ) = import_mitsui_csv(file, card_user=card_user)
+        except ValueError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         return Response(
             {

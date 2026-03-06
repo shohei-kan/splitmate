@@ -181,7 +181,7 @@ export function CsvImportPage() {
             <button
               type="button"
               className="h-11 rounded-xl bg-[#2563EB] px-6 text-sm font-black text-white"
-              onClick={() => nav("/")}
+              onClick={() => nav("/?page=1")}
             >
               ホームに戻る
             </button>

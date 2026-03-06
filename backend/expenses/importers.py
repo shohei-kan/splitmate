@@ -1,5 +1,6 @@
 import csv
 import datetime
+import io
 import unicodedata
 from typing import IO, Dict, List, Tuple
 
@@ -79,6 +80,27 @@ def _normalize_text(value: str) -> str:
     # 大文字/小文字を吸収
     normalized = normalized.casefold()
     return normalized
+
+
+def _decode_text_with_fallback(file_obj: IO[bytes], encodings: List[str]) -> str:
+    """
+    バイト列を複数エンコーディングで順にデコードする。
+    全て失敗したら ValueError を投げる。
+    """
+    raw = file_obj.read()
+    if raw is None:
+        raise ValueError("CSVファイルの読み込みに失敗しました。")
+
+    for encoding in encodings:
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+
+    raise ValueError(
+        "CSVの文字コードを判別できませんでした。"
+        "楽天は UTF-8 / Shift-JIS(cp932) を試してください。"
+    )
 
 
 
@@ -167,9 +189,8 @@ def import_rakuten_csv(
     excluded_samples: List[Dict[str, str]] = []
     excluded_count = 0
 
-    # UTF-8 BOM を想定
-    text_stream = (line.decode("utf-8-sig") for line in file_obj)
-    reader = csv.DictReader(text_stream)
+    text = _decode_text_with_fallback(file_obj, ["utf-8-sig", "cp932"])
+    reader = csv.DictReader(io.StringIO(text))
 
     for row in reader:
         # 楽天のカラム名に合わせる
