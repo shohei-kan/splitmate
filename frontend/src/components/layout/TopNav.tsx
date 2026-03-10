@@ -13,11 +13,11 @@ const items: NavItem[] = [
 
 export function TopNav() {
   return (
-    <header className="h-14 bg-white border-b border-[#E0E0E0]">
-      <div className="max-w-6xl mx-auto px-6 h-full flex items-center justify-between">
+    <header className="h-20 border-b border-[#DCE4EE] bg-white/95 backdrop-blur">
+      <div className="mx-auto flex h-full max-w-6xl items-center justify-between px-6">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-[#1F8EED]" />
-          <span className="font-semibold">SplitMate</span>
+          <div className="h-5 w-5 rounded-sm bg-[#1F8EED]" />
+          <span className="text-sm font-semibold tracking-wide text-[#23405E]">SplitMate</span>
         </div>
 
         <nav className="flex items-center gap-6 text-sm">
@@ -26,8 +26,10 @@ export function TopNav() {
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `px-2 py-1 rounded ${
-                  isActive ? "text-[#1F8EED] font-semibold" : "text-[#6A7C8E] hover:text-[#0A2D4D]"
+                `rounded px-2 py-1 font-semibold transition ${
+                  isActive
+                    ? "bg-[#EFF6FF] text-[#1F8EED]"
+                    : "text-[#6A7C8E] hover:text-[#0A2D4D]"
                 }`
               }
             >
