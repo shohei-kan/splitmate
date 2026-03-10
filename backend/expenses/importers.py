@@ -48,6 +48,35 @@ def _parse_amount(amount_str: str) -> int:
         return 0
 
 
+def _parse_amount_for_sample(value: object) -> int | None:
+    """
+    samples レスポンス用の金額正規化。
+    返却値は必ず int か None。
+    """
+    if isinstance(value, bool):
+        return None
+
+    if isinstance(value, int):
+        return value
+
+    if isinstance(value, float):
+        return int(value) if value == value and value not in (float("inf"), float("-inf")) else None
+
+    if isinstance(value, str):
+        normalized = value.replace("¥", "").replace(",", "").replace(" ", "").strip()
+        if not normalized:
+            return None
+        try:
+            return int(normalized)
+        except ValueError:
+            try:
+                return int(float(normalized))
+            except ValueError:
+                return None
+
+    return None
+
+
 def _get_first(row: Dict[str, str], keys: List[str]) -> str:
     """
     DictReader の 1 行から、候補キーのうち最初に見つかった列の値を返す。
@@ -149,7 +178,7 @@ def _match_exclusion_rule(
 def import_rakuten_csv(
     file_obj: IO[bytes],
     default_card_user: str = Expense.CardUser.UNKNOWN,
-) -> Tuple[int, int, List[Dict[str, str]], int, int, List[Dict[str, object]], List[Dict[str, object]], List[Dict[str, object]]]:
+) -> Tuple[int, int, List[Dict[str, object]], int, int, List[Dict[str, object]], List[Dict[str, object]], List[Dict[str, object]]]:
     """
     楽天カード CSV をインポートして Expense を bulk_create する。
 
@@ -186,7 +215,7 @@ def import_rakuten_csv(
     expenses_to_create: List[Expense] = []
     skipped = 0
     duplicate_count = 0
-    excluded_samples: List[Dict[str, str]] = []
+    excluded_samples: List[Dict[str, object]] = []
     excluded_count = 0
     created_samples: List[Dict[str, object]] = []
     skipped_samples: List[Dict[str, object]] = []
@@ -211,7 +240,8 @@ def import_rakuten_csv(
                 {
                     "date": date_str or "",
                     "store": store or "",
-                    "amount": amount_str or "",
+                    "amount": _parse_amount_for_sample(amount_str),
+                    "raw_amount": amount_str or "",
                     "reason": "invalid_row",
                 }
             )
@@ -234,7 +264,8 @@ def import_rakuten_csv(
                 {
                     "date": date_str,
                     "store": store,
-                    "amount": amount_str,
+                    "amount": _parse_amount_for_sample(amount_str),
+                    "raw_amount": amount_str,
                     "reason": "invalid_date",
                 }
             )
@@ -247,7 +278,8 @@ def import_rakuten_csv(
                 {
                     "date": date_str,
                     "store": store,
-                    "amount": amount_str,
+                    "amount": _parse_amount_for_sample(amount_str),
+                    "raw_amount": amount_str,
                     "reason": "excluded_by_rule",
                 }
             )
@@ -257,7 +289,8 @@ def import_rakuten_csv(
                 {
                     "date": date_str,
                     "store": store,
-                    "amount": amount_str,
+                    "amount": _parse_amount_for_sample(amount_str),
+                    "raw_amount": amount_str,
                     "reason": "excluded_by_rule",
                 }
             )
@@ -273,6 +306,7 @@ def import_rakuten_csv(
                     "date": date_str,
                     "store": store,
                     "amount": amount,
+                    "raw_amount": amount_str,
                     "reason": "duplicate",
                 }
             )
@@ -281,6 +315,7 @@ def import_rakuten_csv(
                     "date": date_str,
                     "store": store,
                     "amount": amount,
+                    "raw_amount": amount_str,
                     "reason": "duplicate",
                 }
             )
@@ -305,6 +340,7 @@ def import_rakuten_csv(
                 "date": date_str,
                 "store": store,
                 "amount": amount,
+                "raw_amount": amount_str,
             }
         )
 
@@ -332,7 +368,7 @@ def import_rakuten_csv(
 def import_mitsui_csv(
     file_obj: IO[bytes],
     card_user: str = Expense.CardUser.ME,
-) -> Tuple[int, int, List[Dict[str, str]], int, int, List[Dict[str, object]], List[Dict[str, object]], List[Dict[str, object]]]:
+) -> Tuple[int, int, List[Dict[str, object]], int, int, List[Dict[str, object]], List[Dict[str, object]], List[Dict[str, object]]]:
     """
     三井住友カード CSV をインポートして Expense を bulk_create する。
 
@@ -364,7 +400,7 @@ def import_mitsui_csv(
     expenses_to_create: List[Expense] = []
     skipped = 0
     duplicate_count = 0
-    excluded_samples: List[Dict[str, str]] = []
+    excluded_samples: List[Dict[str, object]] = []
     excluded_count = 0
     created_samples: List[Dict[str, object]] = []
     skipped_samples: List[Dict[str, object]] = []
@@ -388,7 +424,8 @@ def import_mitsui_csv(
                 {
                     "date": date_str,
                     "store": row[1].strip() if len(row) > 1 else "",
-                    "amount": row[2].strip() if len(row) > 2 else "",
+                    "amount": _parse_amount_for_sample(row[2].strip() if len(row) > 2 else ""),
+                    "raw_amount": row[2].strip() if len(row) > 2 else "",
                     "reason": "non_data_row",
                 }
             )
@@ -414,7 +451,8 @@ def import_mitsui_csv(
                 {
                     "date": date_str,
                     "store": store,
-                    "amount": amount_str,
+                    "amount": _parse_amount_for_sample(amount_str),
+                    "raw_amount": amount_str,
                     "reason": "invalid_row",
                 }
             )
@@ -428,7 +466,8 @@ def import_mitsui_csv(
                 {
                     "date": date_str,
                     "store": store,
-                    "amount": amount_str,
+                    "amount": _parse_amount_for_sample(amount_str),
+                    "raw_amount": amount_str,
                     "reason": "invalid_date",
                 }
             )
@@ -441,7 +480,8 @@ def import_mitsui_csv(
                 {
                     "date": date_str,
                     "store": store,
-                    "amount": amount_str,
+                    "amount": _parse_amount_for_sample(amount_str),
+                    "raw_amount": amount_str,
                     "reason": "excluded_by_rule",
                 }
             )
@@ -451,7 +491,8 @@ def import_mitsui_csv(
                 {
                     "date": date_str,
                     "store": store,
-                    "amount": amount_str,
+                    "amount": _parse_amount_for_sample(amount_str),
+                    "raw_amount": amount_str,
                     "reason": "excluded_by_rule",
                 }
             )
@@ -467,6 +508,7 @@ def import_mitsui_csv(
                     "date": date_str,
                     "store": store,
                     "amount": amount,
+                    "raw_amount": amount_str,
                     "reason": "duplicate",
                 }
             )
@@ -475,6 +517,7 @@ def import_mitsui_csv(
                     "date": date_str,
                     "store": store,
                     "amount": amount,
+                    "raw_amount": amount_str,
                     "reason": "duplicate",
                 }
             )
@@ -499,6 +542,7 @@ def import_mitsui_csv(
                 "date": date_str,
                 "store": store,
                 "amount": amount,
+                "raw_amount": amount_str,
             }
         )
 
