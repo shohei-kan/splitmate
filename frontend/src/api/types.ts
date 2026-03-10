@@ -54,6 +54,9 @@ export type ImportResult = {
   excluded_count: number;
   duplicate_count: number;
   excluded_samples?: Array<unknown>;
+  created_samples?: Array<unknown>;
+  skipped_samples?: Array<unknown>;
+  duplicate_samples?: Array<unknown>;
 };
 
 export type ExclusionRule = {

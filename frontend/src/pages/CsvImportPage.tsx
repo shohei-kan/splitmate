@@ -7,8 +7,10 @@ import type { CardUser, ImportResult } from "../api/types";
 import { CsvDropzone } from "../components/import/CsvDropzone";
 import { qk } from "../lib/queryKeys";
 import { PageShell } from "../components/layout/PageShell";
+import { yen } from "../lib/format";
 
 type CardKind = "rakuten" | "mitsui";
+type DetailKey = "created" | "skipped" | "excluded" | "duplicate";
 
 function ymLabel(year: number, month: number) {
   return `${year}年${String(month).padStart(2, "0")}月`;
@@ -43,7 +45,8 @@ export function CsvImportPage() {
   const [cardUser, setCardUser] = useState<CardUser>("unknown");
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
-  const [openPicker, setOpenPicker] = useState<null | (() => void)>(null);
+  const [showAllExcluded, setShowAllExcluded] = useState(false);
+  const [activeDetail, setActiveDetail] = useState<DetailKey | null>(null);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -53,6 +56,8 @@ export function CsvImportPage() {
     },
     onSuccess: async (res) => {
       setResult(res);
+      setShowAllExcluded(false);
+      setActiveDetail(null);
       await qc.invalidateQueries({ queryKey: qk.summaryMonth(ym.year, ym.month) });
       await qc.invalidateQueries({ queryKey: qk.expensesMonth(ym.year, ym.month) });
     },
@@ -105,7 +110,7 @@ export function CsvImportPage() {
 
             <div className="grid gap-2">
               <label className="text-sm font-bold text-[#41586E]">
-                card_user（デフォルト利用者）
+                カード利用者
               </label>
               <select
                 value={cardUser}
@@ -113,9 +118,9 @@ export function CsvImportPage() {
                 disabled={mutation.isPending || !!result}
                 className="h-11 rounded-xl border border-[#CFD8E3] bg-white px-4 text-sm font-semibold text-[#163A5E]"
               >
-                <option value="me">me</option>
-                <option value="wife">wife</option>
-                <option value="unknown">unknown</option>
+                <option value="me">パパ</option>
+                <option value="wife">ママ</option>
+                <option value="unknown">未選択</option>
               </select>
             </div>
 
@@ -123,7 +128,6 @@ export function CsvImportPage() {
               file={file}
               onFile={setFile}
               disabled={mutation.isPending || !!result}
-              registerOpenPicker={setOpenPicker}
             />
 
             <div className="rounded-xl border border-[#CFD8E3] bg-[#E9EEF4] p-4 text-sm font-medium leading-7 text-[#1F3D5D]">
@@ -142,24 +146,113 @@ export function CsvImportPage() {
               <div className="rounded-xl border border-[#CFD8E3] bg-white p-3">
                 <div className="mb-2 text-sm font-bold text-[#0A2D4D]">取り込み結果</div>
                 {(() => {
-                  const samples = result.excluded_samples?.slice(0, 10) ?? [];
+                  const allSamples = getDetailSamples(result, activeDetail);
+                  const visibleSamples = showAllExcluded ? allSamples : allSamples.slice(0, 10);
                   return (
                     <>
                       <div className="flex flex-wrap gap-2">
-                        <Badge label="created" value={result.created} />
-                        <Badge label="skipped" value={result.skipped} />
-                        <Badge label="excluded" value={result.excluded_count} />
-                        <Badge label="duplicate" value={result.duplicate_count} />
+                        <BadgeButton
+                          label="新規登録"
+                          value={result.created}
+                          active={activeDetail === "created"}
+                          onClick={() => {
+                            setShowAllExcluded(false);
+                            setActiveDetail((prev) => (prev === "created" ? null : "created"));
+                          }}
+                        />
+                        <BadgeButton
+                          label="スキップ"
+                          value={result.skipped}
+                          active={activeDetail === "skipped"}
+                          onClick={() => {
+                            setShowAllExcluded(false);
+                            setActiveDetail((prev) => (prev === "skipped" ? null : "skipped"));
+                          }}
+                        />
+                        <BadgeButton
+                          label="除外"
+                          value={result.excluded_count}
+                          active={activeDetail === "excluded"}
+                          onClick={() => {
+                            setShowAllExcluded(false);
+                            setActiveDetail((prev) => (prev === "excluded" ? null : "excluded"));
+                          }}
+                        />
+                        <BadgeButton
+                          label="重複"
+                          value={result.duplicate_count}
+                          active={activeDetail === "duplicate"}
+                          onClick={() => {
+                            setShowAllExcluded(false);
+                            setActiveDetail((prev) => (prev === "duplicate" ? null : "duplicate"));
+                          }}
+                        />
                       </div>
-                      {samples.length > 0 && (
-                        <details className="mt-3">
-                          <summary className="cursor-pointer text-sm font-semibold text-[#0A2D4D]">
-                            excluded_samples を表示
-                          </summary>
-                          <pre className="mt-2 max-h-56 overflow-auto rounded-lg bg-[#F8FBFF] p-2 text-xs text-[#4B5B6A]">
-                            {JSON.stringify(samples, null, 2)}
-                          </pre>
-                        </details>
+
+                      {activeDetail && allSamples.length > 0 && (
+                        <div className="mt-4 rounded-lg border border-[#DDE6F0] bg-[#FAFCFF] p-3">
+                          <div className="text-sm font-semibold text-[#0A2D4D]">
+                            {detailTitle(activeDetail)}
+                          </div>
+                          <div className="mt-1 text-xs text-[#617488]">
+                            {activeDetail === "excluded"
+                              ? "設定の除外ワードに一致した明細の一部です"
+                              : "取り込み対象データの一部です"}
+                          </div>
+
+                          <div className="mt-3 overflow-x-auto">
+                            <table className="min-w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-[#E7EDF4] text-[#667D93]">
+                                  <th className="whitespace-nowrap px-2 py-2 text-left font-semibold">日付</th>
+                                  <th className="whitespace-nowrap px-2 py-2 text-left font-semibold">店名</th>
+                                  <th className="whitespace-nowrap px-2 py-2 text-right font-semibold">金額</th>
+                                  {activeDetail === "excluded" && (
+                                    <th className="whitespace-nowrap px-2 py-2 text-left font-semibold">除外理由</th>
+                                  )}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {visibleSamples.map((sample, index) => (
+                                  <tr key={`${index}-${sampleDate(sample)}-${sampleStore(sample)}`} className="border-b border-[#EEF3F8] last:border-b-0">
+                                    <td className="whitespace-nowrap px-2 py-2 text-[#1A395B]">
+                                      {sampleDate(sample)}
+                                    </td>
+                                    <td className="min-w-45 px-2 py-2 text-[#1A395B]">
+                                      {sampleStore(sample)}
+                                    </td>
+                                    <td className="whitespace-nowrap px-2 py-2 text-right font-medium text-[#1A395B]">
+                                      {sampleAmount(sample)}
+                                    </td>
+                                    {activeDetail === "excluded" && (
+                                      <td className="px-2 py-2 text-[#4E6277]">
+                                        {sampleReason(sample)}
+                                      </td>
+                                    )}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {allSamples.length > 10 && (
+                            <div className="mt-3">
+                              <button
+                                type="button"
+                                className="rounded-md border border-[#C8D3DE] bg-white px-3 py-1 text-xs font-semibold text-[#41586E] hover:bg-[#F4F8FC]"
+                                onClick={() => setShowAllExcluded((prev) => !prev)}
+                              >
+                                {showAllExcluded ? "10件表示に戻す" : "もっと見る"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {activeDetail && allSamples.length === 0 && (
+                        <div className="mt-4 rounded-lg border border-[#DDE6F0] bg-[#FAFCFF] p-3 text-sm text-[#617488]">
+                          この項目は詳細データが返却されていません。
+                        </div>
                       )}
                     </>
                   );
@@ -178,7 +271,8 @@ export function CsvImportPage() {
                 onClick={() => {
                   setFile(null);
                   setResult(null);
-                  setTimeout(() => openPicker?.(), 0);
+                  setShowAllExcluded(false);
+                  setActiveDetail(null);
                 }}
               >
                 続けて取り込む
@@ -216,11 +310,80 @@ export function CsvImportPage() {
   );
 }
 
-function Badge({ label, value }: { label: string; value: number }) {
+function BadgeButton({
+  label,
+  value,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full bg-[#E8F2FE] px-3 py-1 text-xs font-bold text-[#0A2D4D]">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ${
+        active ? "bg-[#2B8CE6] text-white" : "bg-[#E8F2FE] text-[#0A2D4D]"
+      }`}
+    >
       <span className="opacity-70">{label}</span>
-      <span>{value}</span>
-    </span>
+      <span>{value}件</span>
+    </button>
   );
+}
+
+function detailTitle(key: DetailKey) {
+  if (key === "created") return "新規登録の明細";
+  if (key === "skipped") return "スキップの明細";
+  if (key === "excluded") return "除外された明細（例）";
+  return "重複の明細";
+}
+
+function getDetailSamples(result: ImportResult, key: DetailKey | null): Array<unknown> {
+  if (!key) return [];
+  if (key === "created") return result.created_samples ?? [];
+  if (key === "skipped") return result.skipped_samples ?? [];
+  if (key === "duplicate") return result.duplicate_samples ?? [];
+  return result.excluded_samples ?? [];
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function sampleDate(sample: unknown) {
+  const row = asRecord(sample);
+  if (!row) return "—";
+  const value = row.date;
+  return typeof value === "string" && value.length > 0 ? value : "—";
+}
+
+function sampleStore(sample: unknown) {
+  const row = asRecord(sample);
+  if (!row) return "—";
+  const value = row.store;
+  return typeof value === "string" && value.length > 0 ? value : "—";
+}
+
+function sampleAmount(sample: unknown) {
+  const row = asRecord(sample);
+  if (!row) return "—";
+  const raw = row.amount;
+  const amount =
+    typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
+  return Number.isFinite(amount) ? yen(amount) : "—";
+}
+
+function sampleReason(sample: unknown) {
+  const row = asRecord(sample);
+  if (!row) return "除外（理由不明）";
+  const reason = row.reason;
+  if (reason === "excluded_by_rule") return "除外ワード一致";
+  return typeof reason === "string" && reason.length > 0
+    ? `除外（${reason}）`
+    : "除外（理由不明）";
 }
