@@ -22,6 +22,26 @@ export function createExpense(input: CreateExpenseInput) {
   });
 }
 
+export type UpdateExpenseInput = Partial<
+  Pick<
+    Expense,
+    "date" | "store" | "amount" | "card_user" | "payer" | "burden_type" | "category" | "memo"
+  >
+>;
+
+export function updateExpense(id: number, input: UpdateExpenseInput) {
+  return apiFetch<Expense>(`/api/expenses/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteExpense(id: number) {
+  return apiFetch<void>(`/api/expenses/${id}/`, {
+    method: "DELETE",
+  });
+}
+
 export function fetchExpenses(params: {
   dateFrom: string; // YYYY-MM-DD
   dateTo: string;   // YYYY-MM-DD
