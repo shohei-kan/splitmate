@@ -5,7 +5,7 @@ export type CreateExpenseInput = {
   date: string;
   store: string;
   amount: number;
-  card_user: CardUser; // unknown OK
+  card_user?: CardUser; // omitted -> backend default (unknown)
   payer: Payer;        // ✅ 精算に効く
   burden_type: BurdenType;
   category: Category;

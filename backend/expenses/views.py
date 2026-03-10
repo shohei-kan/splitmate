@@ -177,13 +177,12 @@ class MonthlySummaryView(APIView):
             or 0
         )
 
-        # ② 妻が払った共有分（手入力＋card_user=wife）
-        #    → 妻の現金/妻名義カードで払った共有支出だけをここに積むイメージ
+        # ② 妻が払った共有分（payer=wife）
+        #    → 実際にお金を払った人ベースで集計する
         wife_shared = (
             qs.filter(
                 burden_type=Expense.BurdenType.SHARED,
-                source=Expense.Source.MANUAL,
-                card_user=Expense.CardUser.WIFE,
+                payer=Expense.CardUser.WIFE,
             )
             .aggregate(total=Sum("amount"))["total"]
             or 0
@@ -265,7 +264,7 @@ class MonthlySummaryListView(APIView):
 
             wife_shared = qs.filter(
                 burden_type=Expense.BurdenType.SHARED,
-                card_user=Expense.CardUser.WIFE,
+                payer=Expense.CardUser.WIFE,
             ).aggregate(total=Sum("amount"))["total"] or 0
 
             wife_personal = qs.filter(

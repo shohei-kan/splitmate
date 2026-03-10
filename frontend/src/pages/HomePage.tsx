@@ -17,7 +17,6 @@ import {
 } from "../api/expenses";
 import type {
   Expense,
-  CardUser,
   Payer,
   BurdenType,
   Category,
@@ -45,6 +44,13 @@ function getMonthRangeISO(year: number, month: number) {
 }
 
 function labelCardUser(v: Expense["card_user"] | null | undefined) {
+  if (!v) return "—";
+  if (v === "me") return "私";
+  if (v === "wife") return "妻";
+  return "不明";
+}
+
+function labelPayer(v: Expense["payer"] | null | undefined) {
   if (!v) return "—";
   if (v === "me") return "私";
   if (v === "wife") return "妻";
@@ -150,7 +156,6 @@ export function HomePage() {
     date: string;
     store: string;
     amount: string;
-    card_user: CardUser;
     payer: Payer;
     burden_type: BurdenType;
     category: Category;
@@ -160,7 +165,6 @@ export function HomePage() {
     date: toISODate(new Date()),
     store: "",
     amount: "",
-    card_user: "unknown",
     payer: "me",
     burden_type: "shared",
     category: "uncategorized",
@@ -184,7 +188,6 @@ export function HomePage() {
         date: form.date,
         store: form.store.trim(),
         amount,
-        card_user: form.card_user,
         payer: form.payer,
         burden_type: form.burden_type,
         category: form.category,
@@ -353,7 +356,6 @@ export function HomePage() {
             >
               <option value="me">私</option>
               <option value="wife">妻</option>
-              <option value="unknown">不明</option>
             </select>
             <input
               className="h-11 rounded-xl border border-[#D1DCE8] bg-white px-4 text-base placeholder:text-[#91A2B4]"
@@ -361,17 +363,6 @@ export function HomePage() {
               onChange={(e) => setForm((p) => ({ ...p, memo: e.target.value }))}
               placeholder="メモ"
             />
-            <select
-              className="h-11 rounded-xl border border-[#D1DCE8] bg-white px-4 text-base text-[#153B61]"
-              value={form.card_user}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, card_user: e.target.value as CardUser }))
-              }
-            >
-              <option value="unknown">カード利用者: 不明</option>
-              <option value="me">カード利用者: 私</option>
-              <option value="wife">カード利用者: 妻</option>
-            </select>
             <select
               className="h-11 rounded-xl border border-[#D1DCE8] bg-white px-4 text-base text-[#153B61]"
               value={form.category}
@@ -430,6 +421,7 @@ export function HomePage() {
                   <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">日付</th>
                   <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">購入先</th>
                   <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">カード利用者</th>
+                  <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">支払い者</th>
                   <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">負担区分</th>
                   <th className="whitespace-nowrap px-6 py-3 text-right font-semibold">金額</th>
                   <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">メモ</th>
@@ -439,13 +431,13 @@ export function HomePage() {
               <tbody>
                 {expensesQuery.isLoading ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-[#6A7C8E]">
+                    <td colSpan={8} className="px-6 py-8 text-center text-[#6A7C8E]">
                       読み込み中...
                     </td>
                   </tr>
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-10 text-center text-[#6A7C8E]">
+                    <td colSpan={8} className="px-6 py-10 text-center text-[#6A7C8E]">
                       データがありません
                     </td>
                   </tr>
@@ -456,6 +448,9 @@ export function HomePage() {
                       <td className="min-w-55 px-6 py-4 text-base text-[#1A395B]">{e.store}</td>
                       <td className="whitespace-nowrap px-6 py-4 text-base text-[#1A395B]">
                         {labelCardUser(e.card_user)}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-base text-[#1A395B]">
+                        {labelPayer(e.payer)}
                       </td>
                       <td className="whitespace-nowrap px-6 py-4">
                         <select
