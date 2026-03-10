@@ -7,7 +7,7 @@ import type { CardUser, ImportResult } from "../api/types";
 import { CsvDropzone } from "../components/import/CsvDropzone";
 import { qk } from "../lib/queryKeys";
 import { PageShell } from "../components/layout/PageShell";
-import { yen } from "../lib/format";
+import { coerceSample } from "../lib/importSample";
 
 type CardKind = "rakuten" | "mitsui";
 type DetailKey = "created" | "skipped" | "excluded" | "duplicate";
@@ -147,7 +147,8 @@ export function CsvImportPage() {
                 <div className="mb-2 text-sm font-bold text-[#0A2D4D]">取り込み結果</div>
                 {(() => {
                   const allSamples = getDetailSamples(result, activeDetail);
-                  const visibleSamples = showAllExcluded ? allSamples : allSamples.slice(0, 10);
+                  const allRows = allSamples.map(coerceSample);
+                  const visibleRows = showAllExcluded ? allRows : allRows.slice(0, 10);
                   return (
                     <>
                       <div className="flex flex-wrap gap-2">
@@ -207,28 +208,24 @@ export function CsvImportPage() {
                                   <th className="whitespace-nowrap px-2 py-2 text-left font-semibold">日付</th>
                                   <th className="whitespace-nowrap px-2 py-2 text-left font-semibold">店名</th>
                                   <th className="whitespace-nowrap px-2 py-2 text-right font-semibold">金額</th>
-                                  {activeDetail === "excluded" && (
-                                    <th className="whitespace-nowrap px-2 py-2 text-left font-semibold">除外理由</th>
-                                  )}
+                                  <th className="whitespace-nowrap px-2 py-2 text-left font-semibold">除外理由</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {visibleSamples.map((sample, index) => (
-                                  <tr key={`${index}-${sampleDate(sample)}-${sampleStore(sample)}`} className="border-b border-[#EEF3F8] last:border-b-0">
+                                {visibleRows.map((sample, index) => (
+                                  <tr key={`${index}-${sample.date}-${sample.store}`} className="border-b border-[#EEF3F8] last:border-b-0">
                                     <td className="whitespace-nowrap px-2 py-2 text-[#1A395B]">
-                                      {sampleDate(sample)}
+                                      {sample.date}
                                     </td>
                                     <td className="min-w-45 px-2 py-2 text-[#1A395B]">
-                                      {sampleStore(sample)}
+                                      {sample.store}
                                     </td>
                                     <td className="whitespace-nowrap px-2 py-2 text-right font-medium text-[#1A395B]">
-                                      {sampleAmount(sample)}
+                                      {sample.amountText}
                                     </td>
-                                    {activeDetail === "excluded" && (
-                                      <td className="px-2 py-2 text-[#4E6277]">
-                                        {sampleReason(sample)}
-                                      </td>
-                                    )}
+                                    <td className="px-2 py-2 text-[#4E6277]">
+                                      {sample.reasonText ?? "—"}
+                                    </td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -348,42 +345,4 @@ function getDetailSamples(result: ImportResult, key: DetailKey | null): Array<un
   if (key === "skipped") return result.skipped_samples ?? [];
   if (key === "duplicate") return result.duplicate_samples ?? [];
   return result.excluded_samples ?? [];
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
-
-function sampleDate(sample: unknown) {
-  const row = asRecord(sample);
-  if (!row) return "—";
-  const value = row.date;
-  return typeof value === "string" && value.length > 0 ? value : "—";
-}
-
-function sampleStore(sample: unknown) {
-  const row = asRecord(sample);
-  if (!row) return "—";
-  const value = row.store;
-  return typeof value === "string" && value.length > 0 ? value : "—";
-}
-
-function sampleAmount(sample: unknown) {
-  const row = asRecord(sample);
-  if (!row) return "—";
-  const raw = row.amount;
-  const amount =
-    typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
-  return Number.isFinite(amount) ? yen(amount) : "—";
-}
-
-function sampleReason(sample: unknown) {
-  const row = asRecord(sample);
-  if (!row) return "除外（理由不明）";
-  const reason = row.reason;
-  if (reason === "excluded_by_rule") return "除外ワード一致";
-  return typeof reason === "string" && reason.length > 0
-    ? `除外（${reason}）`
-    : "除外（理由不明）";
 }
