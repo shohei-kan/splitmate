@@ -1,5 +1,5 @@
 // frontend/src/pages/HomePage.tsx
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ChangeEvent, type CompositionEvent } from "react";
 import {
   useQuery,
   useMutation,
@@ -17,6 +17,7 @@ import {
 } from "../api/expenses";
 import type {
   Expense,
+  CardUser,
   Payer,
   BurdenType,
   Category,
@@ -37,6 +38,33 @@ function toISODate(d: Date) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
+const zenkakuKanaMap: Record<string, string> = {
+  "。": "｡", "「": "｢", "」": "｣", "、": "､", "・": "･", "ー": "ｰ",
+  "ヲ": "ｦ", "ァ": "ｧ", "ィ": "ｨ", "ゥ": "ｩ", "ェ": "ｪ", "ォ": "ｫ",
+  "ャ": "ｬ", "ュ": "ｭ", "ョ": "ｮ", "ッ": "ｯ",
+  "ア": "ｱ", "イ": "ｲ", "ウ": "ｳ", "エ": "ｴ", "オ": "ｵ",
+  "カ": "ｶ", "キ": "ｷ", "ク": "ｸ", "ケ": "ｹ", "コ": "ｺ",
+  "サ": "ｻ", "シ": "ｼ", "ス": "ｽ", "セ": "ｾ", "ソ": "ｿ",
+  "タ": "ﾀ", "チ": "ﾁ", "ツ": "ﾂ", "テ": "ﾃ", "ト": "ﾄ",
+  "ナ": "ﾅ", "ニ": "ﾆ", "ヌ": "ﾇ", "ネ": "ﾈ", "ノ": "ﾉ",
+  "ハ": "ﾊ", "ヒ": "ﾋ", "フ": "ﾌ", "ヘ": "ﾍ", "ホ": "ﾎ",
+  "マ": "ﾏ", "ミ": "ﾐ", "ム": "ﾑ", "メ": "ﾒ", "モ": "ﾓ",
+  "ヤ": "ﾔ", "ユ": "ﾕ", "ヨ": "ﾖ",
+  "ラ": "ﾗ", "リ": "ﾘ", "ル": "ﾙ", "レ": "ﾚ", "ロ": "ﾛ",
+  "ワ": "ﾜ", "ン": "ﾝ",
+  "ガ": "ｶﾞ", "ギ": "ｷﾞ", "グ": "ｸﾞ", "ゲ": "ｹﾞ", "ゴ": "ｺﾞ",
+  "ザ": "ｻﾞ", "ジ": "ｼﾞ", "ズ": "ｽﾞ", "ゼ": "ｾﾞ", "ゾ": "ｿﾞ",
+  "ダ": "ﾀﾞ", "ヂ": "ﾁﾞ", "ヅ": "ﾂﾞ", "デ": "ﾃﾞ", "ド": "ﾄﾞ",
+  "バ": "ﾊﾞ", "ビ": "ﾋﾞ", "ブ": "ﾌﾞ", "ベ": "ﾍﾞ", "ボ": "ﾎﾞ",
+  "パ": "ﾊﾟ", "ピ": "ﾋﾟ", "プ": "ﾌﾟ", "ペ": "ﾍﾟ", "ポ": "ﾎﾟ",
+  "ヴ": "ｳﾞ",
+};
+
+function toHalfWidthKatakanaAndDigits(value: string) {
+  const normalized = value.normalize("NFKC");
+  return normalized.replace(/[。、「」、・ーァ-ヶヴ]/g, (s) => zenkakuKanaMap[s] ?? s);
+}
+
 function getMonthRangeISO(year: number, month: number) {
   const start = new Date(year, month - 1, 1);
   const end = new Date(year, month, 0); // 0日 = 前月末日
@@ -45,16 +73,60 @@ function getMonthRangeISO(year: number, month: number) {
 
 function labelCardUser(v: Expense["card_user"] | null | undefined) {
   if (!v) return "—";
-  if (v === "me") return "私";
-  if (v === "wife") return "妻";
+  if (v === "me") return "パパ";
+  if (v === "wife") return "ママ";
   return "不明";
 }
 
 function labelPayer(v: Expense["payer"] | null | undefined) {
   if (!v) return "—";
-  if (v === "me") return "私";
-  if (v === "wife") return "妻";
+  if (v === "me") return "パパ";
+  if (v === "wife") return "ママ";
   return "不明";
+}
+
+function labelCategory(v: Expense["category"]) {
+  if (v === "food") return "食費";
+  if (v === "daily") return "日用品";
+  if (v === "outside_food") return "外食";
+  if (v === "utility") return "光熱費";
+  if (v === "travel") return "旅行";
+  if (v === "other") return "その他";
+  return "未分類";
+}
+
+function labelBurdenType(v: Expense["burden_type"]) {
+  if (v === "shared") return "共有支出";
+  if (v === "wife_only") return "ママ個人";
+  return "パパ個人";
+}
+
+function cardUserBadgeClass(v: Expense["card_user"] | null | undefined) {
+  if (v === "me") return "bg-[#E8F4FF] text-[#1D5EA8]";
+  if (v === "wife") return "bg-[#FCEAF1] text-[#B94F76]";
+  return "bg-[#EEF1F5] text-[#5E6E7E]";
+}
+
+function payerBadgeClass(v: Expense["payer"] | null | undefined) {
+  if (v === "me") return "bg-[#E7F3FF] text-[#155FAD]";
+  if (v === "wife") return "bg-[#FFF0E6] text-[#BA6A25]";
+  return "bg-[#EEF1F5] text-[#5E6E7E]";
+}
+
+function categoryBadgeClass(v: Expense["category"]) {
+  if (v === "food") return "bg-[#E7F6EC] text-[#24734B]";
+  if (v === "daily") return "bg-[#F1F6FF] text-[#2B5E9E]";
+  if (v === "outside_food") return "bg-[#FFF4E7] text-[#A8641F]";
+  if (v === "utility") return "bg-[#F3EDFF] text-[#6741A6]";
+  if (v === "travel") return "bg-[#E8FBFF] text-[#1B6C80]";
+  if (v === "other") return "bg-[#F7F0E8] text-[#7A5C36]";
+  return "bg-[#EEF1F5] text-[#5E6E7E]";
+}
+
+function burdenBadgeClass(v: Expense["burden_type"]) {
+  if (v === "shared") return "bg-[#2B8CE6] text-white";
+  if (v === "wife_only") return "bg-[#FADDE7] text-[#E36D94]";
+  return "bg-[#ECEEF1] text-[#5D6C7B]";
 }
 
 function labelSource(v: Expense["source"]) {
@@ -157,7 +229,6 @@ export function HomePage() {
     store: string;
     amount: string;
     payer: Payer;
-    burden_type: BurdenType;
     category: Category;
     memo: string;
   }>(() => ({
@@ -166,10 +237,35 @@ export function HomePage() {
     store: "",
     amount: "",
     payer: "me",
-    burden_type: "shared",
     category: "uncategorized",
     memo: "",
   }));
+  const [isComposing, setIsComposing] = useState(false);
+
+  const setFormTextField = (field: "store" | "amount" | "memo", value: string) => {
+    setForm((prev) => {
+      if (field === "store") return { ...prev, store: value };
+      if (field === "amount") return { ...prev, amount: value };
+      return { ...prev, memo: value };
+    });
+  };
+
+  const handleFormTextChange =
+    (field: "store" | "amount" | "memo") => (e: ChangeEvent<HTMLInputElement>) => {
+      const next = e.target.value;
+      setFormTextField(field, isComposing ? next : toHalfWidthKatakanaAndDigits(next));
+    };
+
+  const handleFormCompositionStart = () => {
+    setIsComposing(true);
+  };
+
+  const handleFormCompositionEnd =
+    (field: "store" | "amount" | "memo") =>
+    (e: CompositionEvent<HTMLInputElement>) => {
+      setIsComposing(false);
+      setFormTextField(field, toHalfWidthKatakanaAndDigits(e.currentTarget.value));
+    };
 
   // targetYM が変わったとき、日付が対象月外になりがちなので、
   // ここは「そのまま維持」にしてる（勝手に書き換えない）。
@@ -189,7 +285,7 @@ export function HomePage() {
         store: form.store.trim(),
         amount,
         payer: form.payer,
-        burden_type: form.burden_type,
+        burden_type: "shared",
         category: form.category,
         memo: form.memo,
       });
@@ -239,6 +335,27 @@ export function HomePage() {
     !!form.amount &&
     Number.isFinite(Number(form.amount)) &&
     Number(form.amount) > 0;
+
+  const [editForm, setEditForm] = useState<{
+    id: number;
+    date: string;
+    store: string;
+    amount: string;
+    card_user: CardUser;
+    payer: Payer;
+    burden_type: BurdenType;
+    category: Category;
+    memo: string;
+    source: Expense["source"];
+  } | null>(null);
+
+  const canSaveEdit =
+    !!editForm &&
+    !!editForm.store.trim() &&
+    !!editForm.date &&
+    !!editForm.amount &&
+    Number.isFinite(Number(editForm.amount)) &&
+    Number(editForm.amount) > 0;
 
   return (
     <PageShell>
@@ -307,13 +424,13 @@ export function HomePage() {
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <Summary title="総支出" value={data ? yen(data.shared_total) : null} />
-          <Summary title="私の共有支出" value={meShared !== null ? yen(meShared) : null} />
-          <Summary title="妻の共有支出" value={data ? yen(data.wife_shared) : null} />
+          <Summary title="パパの共有支出" value={meShared !== null ? yen(meShared) : null} />
+          <Summary title="ママの共有支出" value={data ? yen(data.wife_shared) : null} />
           {showWifePersonal && (
-            <Summary title="妻の個人利用" value={data ? yen(data.wife_personal) : null} accent />
+            <Summary title="ママの個人利用" value={data ? yen(data.wife_personal) : null} accent />
           )}
           <Summary title="折半額" value={data ? yen(data.half) : null} blue />
-          <Summary title="振込（妻→私）" value={data ? yen(data.transfer_amount) : null} blue />
+          <Summary title="振込（ママ→パパ）" value={data ? yen(data.transfer_amount) : null} blue />
         </div>
 
         <Card className="p-5 sm:p-6">
@@ -328,41 +445,28 @@ export function HomePage() {
             <input
               className="h-11 rounded-xl border border-[#D1DCE8] bg-white px-4 text-base placeholder:text-[#91A2B4]"
               value={form.store}
-              onChange={(e) => setForm((p) => ({ ...p, store: e.target.value }))}
+              onCompositionStart={handleFormCompositionStart}
+              onCompositionEnd={handleFormCompositionEnd("store")}
+              onChange={handleFormTextChange("store")}
               placeholder="購入先"
             />
             <input
               className="h-11 rounded-xl border border-[#D1DCE8] bg-white px-4 text-base placeholder:text-[#91A2B4]"
               inputMode="numeric"
               value={form.amount}
-              onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
+              onCompositionStart={handleFormCompositionStart}
+              onCompositionEnd={handleFormCompositionEnd("amount")}
+              onChange={handleFormTextChange("amount")}
               placeholder="金額"
             />
-            <select
-              className="h-11 rounded-xl border border-[#D1DCE8] bg-white px-4 text-base text-[#153B61]"
-              value={form.burden_type}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, burden_type: e.target.value as BurdenType }))
-              }
-            >
-              <option value="shared">共有支出</option>
-              <option value="wife_only">妻個人</option>
-              <option value="me_only">私個人</option>
-            </select>
             <select
               className="h-11 rounded-xl border border-[#D1DCE8] bg-white px-4 text-base text-[#153B61]"
               value={form.payer}
               onChange={(e) => setForm((p) => ({ ...p, payer: e.target.value as Payer }))}
             >
-              <option value="me">私</option>
-              <option value="wife">妻</option>
+              <option value="me">支払い者: パパ</option>
+              <option value="wife">支払い者: ママ</option>
             </select>
-            <input
-              className="h-11 rounded-xl border border-[#D1DCE8] bg-white px-4 text-base placeholder:text-[#91A2B4]"
-              value={form.memo}
-              onChange={(e) => setForm((p) => ({ ...p, memo: e.target.value }))}
-              placeholder="メモ"
-            />
             <select
               className="h-11 rounded-xl border border-[#D1DCE8] bg-white px-4 text-base text-[#153B61]"
               value={form.category}
@@ -378,7 +482,15 @@ export function HomePage() {
               <option value="travel">カテゴリ: 旅行</option>
               <option value="other">カテゴリ: その他</option>
             </select>
-            <div className="flex items-center justify-end">
+            <input
+              className="h-11 rounded-xl border border-[#D1DCE8] bg-white px-4 text-base placeholder:text-[#91A2B4]"
+              value={form.memo}
+              onCompositionStart={handleFormCompositionStart}
+              onCompositionEnd={handleFormCompositionEnd("memo")}
+              onChange={handleFormTextChange("memo")}
+              placeholder="メモ"
+            />
+            <div className="flex items-center justify-end md:col-span-3">
               <button
                 type="button"
                 className="h-11 min-w-28 rounded-xl bg-[#2B8CE6] px-5 text-base font-bold text-white disabled:opacity-50"
@@ -422,6 +534,7 @@ export function HomePage() {
                   <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">購入先</th>
                   <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">カード利用者</th>
                   <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">支払い者</th>
+                  <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">カテゴリ</th>
                   <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">負担区分</th>
                   <th className="whitespace-nowrap px-6 py-3 text-right font-semibold">金額</th>
                   <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">メモ</th>
@@ -431,13 +544,13 @@ export function HomePage() {
               <tbody>
                 {expensesQuery.isLoading ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-8 text-center text-[#6A7C8E]">
+                    <td colSpan={9} className="px-6 py-8 text-center text-[#6A7C8E]">
                       読み込み中...
                     </td>
                   </tr>
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-10 text-center text-[#6A7C8E]">
+                    <td colSpan={9} className="px-6 py-10 text-center text-[#6A7C8E]">
                       データがありません
                     </td>
                   </tr>
@@ -447,33 +560,40 @@ export function HomePage() {
                       <td className="whitespace-nowrap px-6 py-4 text-base text-[#4D6278]">{e.date}</td>
                       <td className="min-w-55 px-6 py-4 text-base text-[#1A395B]">{e.store}</td>
                       <td className="whitespace-nowrap px-6 py-4 text-base text-[#1A395B]">
-                        {labelCardUser(e.card_user)}
+                        <span
+                          className={`inline-flex items-center rounded-xl px-3 py-1 text-sm font-semibold ${cardUserBadgeClass(
+                            e.card_user
+                          )}`}
+                        >
+                          {labelCardUser(e.card_user)}
+                        </span>
                       </td>
                       <td className="whitespace-nowrap px-6 py-4 text-base text-[#1A395B]">
-                        {labelPayer(e.payer)}
+                        <span
+                          className={`inline-flex items-center rounded-xl px-3 py-1 text-sm font-semibold ${payerBadgeClass(
+                            e.payer
+                          )}`}
+                        >
+                          {labelPayer(e.payer)}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-base text-[#596F85]">
+                        <span
+                          className={`inline-flex items-center rounded-xl px-3 py-1 text-sm font-semibold ${categoryBadgeClass(
+                            e.category
+                          )}`}
+                        >
+                          {labelCategory(e.category)}
+                        </span>
                       </td>
                       <td className="whitespace-nowrap px-6 py-4">
-                        <select
-                          className={`h-8 rounded-xl border px-2 text-sm font-semibold ${
-                            e.burden_type === "shared"
-                              ? "border-[#2B8CE6] bg-[#2B8CE6] text-white"
-                              : e.burden_type === "wife_only"
-                                ? "border-[#F3C7D7] bg-[#FADDE7] text-[#E36D94]"
-                                : "border-[#DDE2E8] bg-[#ECEEF1] text-[#5D6C7B]"
-                          }`}
-                          value={e.burden_type}
-                          disabled={updateMutation.isPending}
-                          onChange={(ev) => {
-                            updateMutation.mutate({
-                              id: e.id,
-                              input: { burden_type: ev.target.value as BurdenType },
-                            });
-                          }}
+                        <span
+                          className={`inline-flex items-center rounded-xl px-3 py-1 text-sm font-semibold ${burdenBadgeClass(
+                            e.burden_type
+                          )}`}
                         >
-                          <option value="shared">共有支出</option>
-                          <option value="wife_only">妻個人</option>
-                          <option value="me_only">私個人</option>
-                        </select>
+                          {labelBurdenType(e.burden_type)}
+                        </span>
                       </td>
                       <td
                         className={`whitespace-nowrap px-6 py-4 text-right text-base font-semibold ${
@@ -490,15 +610,22 @@ export function HomePage() {
                         <div className="flex items-center gap-3">
                           <button
                             type="button"
-                            className="text-xl text-[#60758B] hover:text-[#2B8CE6]"
-                            title="メモを編集"
+                            className="rounded-md px-2 py-1 text-sm font-semibold text-[#60758B] hover:bg-[#EEF4FB] hover:text-[#2B8CE6] disabled:cursor-not-allowed disabled:opacity-45"
+                            title={e.source === "manual" ? "登録内容を編集" : "手入力のみ編集できます"}
+                            disabled={e.source !== "manual"}
                             onClick={() => {
-                              const nextMemo = window.prompt("メモを編集", e.memo ?? "");
-                              if (nextMemo === null) return;
-                              if (nextMemo === e.memo) return;
-                              updateMutation.mutate({
+                              if (e.source !== "manual") return;
+                              setEditForm({
                                 id: e.id,
-                                input: { memo: nextMemo },
+                                date: e.date,
+                                store: e.store,
+                                amount: String(e.amount),
+                                card_user: e.card_user ?? "unknown",
+                                payer: e.payer,
+                                burden_type: e.burden_type,
+                                category: e.category,
+                                memo: e.memo ?? "",
+                                source: e.source,
                               });
                             }}
                           >
@@ -506,7 +633,7 @@ export function HomePage() {
                           </button>
                           <button
                             type="button"
-                            className="text-xl text-[#E05A66] hover:text-[#CC2F3C]"
+                            className="text-[#E05A66] hover:text-[#CC2F3C]"
                             title="削除"
                             onClick={() => {
                               const ok = window.confirm("この支出を削除しますか？");
@@ -514,7 +641,22 @@ export function HomePage() {
                               deleteMutation.mutate(e.id);
                             }}
                           >
-                            🗑
+                            <svg
+                              aria-hidden="true"
+                              viewBox="0 0 24 24"
+                              className="h-5 w-5"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M3 6h18" />
+                              <path d="M8 6V4h8v2" />
+                              <path d="M19 6l-1 14H6L5 6" />
+                              <path d="M10 11v6" />
+                              <path d="M14 11v6" />
+                            </svg>
                           </button>
                         </div>
                       </td>
@@ -556,6 +698,175 @@ export function HomePage() {
           </div>
           <div className="px-6 pb-5 text-xs text-[#6A7C8E]">金額が {yen(highlightThreshold)} 以上は赤表示</div>
         </Card>
+
+        {editForm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-3xl rounded-2xl border border-[#D1DCE8] bg-white shadow-xl">
+              <div className="flex items-center justify-between border-b border-[#E7EDF4] px-6 py-4">
+                <h2 className="text-lg font-bold text-[#143A61]">登録内容を編集</h2>
+                <button
+                  type="button"
+                  className="rounded-md px-2 py-1 text-sm text-[#60758B] hover:bg-[#EEF4FB]"
+                  onClick={() => setEditForm(null)}
+                >
+                  閉じる
+                </button>
+              </div>
+
+              <div className="grid gap-3 px-6 py-5 md:grid-cols-2">
+                <label className="grid gap-1 text-sm text-[#60758B]">
+                  日付
+                  <input
+                    type="date"
+                    className="h-10 rounded-lg border border-[#D1DCE8] px-3 text-sm text-[#153B61]"
+                    value={editForm.date}
+                    onChange={(e) => setEditForm((p) => (p ? { ...p, date: e.target.value } : p))}
+                  />
+                </label>
+
+                <label className="grid gap-1 text-sm text-[#60758B]">
+                  購入先
+                  <input
+                    className="h-10 rounded-lg border border-[#D1DCE8] px-3 text-sm text-[#153B61]"
+                    value={editForm.store}
+                    onChange={(e) =>
+                      setEditForm((p) =>
+                        p ? { ...p, store: toHalfWidthKatakanaAndDigits(e.target.value) } : p
+                      )
+                    }
+                  />
+                </label>
+
+                <label className="grid gap-1 text-sm text-[#60758B]">
+                  金額
+                  <input
+                    inputMode="numeric"
+                    className="h-10 rounded-lg border border-[#D1DCE8] px-3 text-sm text-[#153B61]"
+                    value={editForm.amount}
+                    onChange={(e) =>
+                      setEditForm((p) =>
+                        p ? { ...p, amount: toHalfWidthKatakanaAndDigits(e.target.value) } : p
+                      )
+                    }
+                  />
+                </label>
+
+                <label className="grid gap-1 text-sm text-[#60758B]">
+                  カード利用者
+                  <select
+                    className="h-10 rounded-lg border border-[#D1DCE8] px-3 text-sm text-[#153B61]"
+                    value={editForm.card_user}
+                    onChange={(e) =>
+                      setEditForm((p) => (p ? { ...p, card_user: e.target.value as CardUser } : p))
+                    }
+                  >
+                    <option value="me">パパ</option>
+                    <option value="wife">ママ</option>
+                    <option value="unknown">不明</option>
+                  </select>
+                </label>
+
+                <label className="grid gap-1 text-sm text-[#60758B]">
+                  支払い者
+                  <select
+                    className="h-10 rounded-lg border border-[#D1DCE8] px-3 text-sm text-[#153B61]"
+                    value={editForm.payer}
+                    onChange={(e) => setEditForm((p) => (p ? { ...p, payer: e.target.value as Payer } : p))}
+                  >
+                    <option value="me">パパ</option>
+                    <option value="wife">ママ</option>
+                  </select>
+                </label>
+
+                <label className="grid gap-1 text-sm text-[#60758B]">
+                  負担区分
+                  <select
+                    className="h-10 rounded-lg border border-[#D1DCE8] px-3 text-sm text-[#153B61]"
+                    value={editForm.burden_type}
+                    onChange={(e) =>
+                      setEditForm((p) => (p ? { ...p, burden_type: e.target.value as BurdenType } : p))
+                    }
+                  >
+                    <option value="shared">共有支出</option>
+                    <option value="wife_only">ママ個人</option>
+                    <option value="me_only">パパ個人</option>
+                  </select>
+                </label>
+
+                <label className="grid gap-1 text-sm text-[#60758B]">
+                  カテゴリ
+                  <select
+                    className="h-10 rounded-lg border border-[#D1DCE8] px-3 text-sm text-[#153B61]"
+                    value={editForm.category}
+                    onChange={(e) =>
+                      setEditForm((p) => (p ? { ...p, category: e.target.value as Category } : p))
+                    }
+                  >
+                    <option value="uncategorized">未分類</option>
+                    <option value="food">食費</option>
+                    <option value="daily">日用品</option>
+                    <option value="outside_food">外食</option>
+                    <option value="utility">光熱費</option>
+                    <option value="travel">旅行</option>
+                    <option value="other">その他</option>
+                  </select>
+                </label>
+
+                <label className="grid gap-1 text-sm text-[#60758B] md:col-span-2">
+                  メモ
+                  <textarea
+                    className="min-h-21 rounded-lg border border-[#D1DCE8] px-3 py-2 text-sm text-[#153B61]"
+                    value={editForm.memo}
+                    onChange={(e) =>
+                      setEditForm((p) =>
+                        p ? { ...p, memo: toHalfWidthKatakanaAndDigits(e.target.value) } : p
+                      )
+                    }
+                  />
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-[#E7EDF4] px-6 py-4">
+                <button
+                  type="button"
+                  className="h-10 rounded-lg border border-[#D1DCE8] bg-white px-4 text-sm font-semibold text-[#60758B]"
+                  onClick={() => setEditForm(null)}
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  className="h-10 rounded-lg bg-[#2B8CE6] px-4 text-sm font-semibold text-white disabled:opacity-50"
+                  disabled={!canSaveEdit || updateMutation.isPending}
+                  onClick={() => {
+                    if (!editForm) return;
+                    const nextAmount = Number(editForm.amount);
+                    updateMutation.mutate(
+                      {
+                        id: editForm.id,
+                        input: {
+                          date: editForm.date,
+                          store: editForm.store.trim(),
+                          amount: nextAmount,
+                          card_user: editForm.card_user,
+                          payer: editForm.payer,
+                          burden_type: editForm.burden_type,
+                          category: editForm.category,
+                          memo: editForm.memo,
+                        },
+                      },
+                      {
+                        onSuccess: () => setEditForm(null),
+                      }
+                    );
+                  }}
+                >
+                  {updateMutation.isPending ? "保存中..." : "保存"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </PageShell>
   );
