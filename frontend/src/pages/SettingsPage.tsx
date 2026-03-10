@@ -5,6 +5,7 @@ import { updateSettings } from "../api/settings";
 import { syncAllSourceExclusionRules } from "../api/exclusionRules";
 import { DEFAULT_HIGHLIGHT_THRESHOLD, useSettings } from "../hooks/useSettings";
 import { qk } from "../lib/queryKeys";
+import { PageShell } from "../components/layout/PageShell";
 
 function toTextarea(words: string[]) {
   return (words ?? []).join("\n");
@@ -62,57 +63,65 @@ export function SettingsPage() {
   });
 
   return (
-    <div className="space-y-5">
-      <div className="text-3xl font-black text-[#0A2D4D]">設定</div>
+    <PageShell>
+      <div className="mx-auto max-w-4xl space-y-6">
+        <div className="text-3xl font-bold text-[#163A5E]">設定</div>
 
-      <div className="rounded-xl border border-[#E0E0E0] bg-white p-5">
-        <div className="text-base font-semibold">除外ワード</div>
-        <div className="mt-1 text-xs text-[#6A7C8E]">改行区切りで入力します</div>
-        <textarea
-          className="mt-3 min-h-40 w-full rounded-lg border border-[#E0E0E0] px-3 py-2 text-sm"
-          value={excludedWordsText}
-          onChange={(e) => setExcludedWordsDraft(e.target.value)}
-          disabled={settingsQ.isLoading || saveMut.isPending}
-          placeholder={"例)\nテスト決済\nポイント利用"}
-        />
-      </div>
+        <div className="rounded-3xl border border-[#D7DFE8] bg-[#F2F4F7] p-6 sm:p-7">
+          <div className="text-2xl font-bold text-[#163A5E]">除外ワード</div>
+          <div className="mt-2 text-base text-[#6A7C8E]">
+            CSVインポート時に除外する文字列を改行区切りで入力してください
+          </div>
+          <textarea
+            className="mt-3 min-h-44 w-full rounded-xl border border-[#CFD8E3] bg-white px-4 py-3 text-base text-[#163A5E]"
+            value={excludedWordsText}
+            onChange={(e) => setExcludedWordsDraft(e.target.value)}
+            disabled={settingsQ.isLoading || saveMut.isPending}
+            placeholder={"Suica\nPASMO\nチャージ"}
+          />
+          <div className="mt-2 text-base text-[#6A7C8E]">
+            例：交通系ICカードへのチャージ、ポイント払い など
+          </div>
 
-      <div className="rounded-xl border border-[#E0E0E0] bg-white p-5">
-        <div className="text-base font-semibold">金額ハイライト閾値</div>
-        <div className="mt-1 text-xs text-[#6A7C8E]">この金額以上を赤字表示します</div>
-        <input
-          className="mt-3 h-10 w-full max-w-xs rounded-lg border border-[#E0E0E0] px-3 text-sm"
-          inputMode="numeric"
-          value={thresholdText}
-          onChange={(e) => setThresholdDraft(e.target.value.replace(/[^\d]/g, ""))}
-          disabled={settingsQ.isLoading || saveMut.isPending}
-          placeholder="10000"
-        />
-      </div>
-
-      {(settingsQ.isError || saveMut.isError) && (
-        <div className="text-sm text-red-600">
-          {((settingsQ.error || saveMut.error) as Error).message}
+          <div className="mt-8 text-2xl font-bold text-[#163A5E]">金額ハイライト閾値</div>
+          <div className="mt-2 text-base text-[#6A7C8E]">この金額以上の支出を赤色で強調表示します</div>
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              className="h-12 w-full max-w-42.5 rounded-xl border border-[#CFD8E3] bg-white px-4 text-base text-[#163A5E]"
+              inputMode="numeric"
+              value={thresholdText}
+              onChange={(e) => setThresholdDraft(e.target.value.replace(/[^\d]/g, ""))}
+              disabled={settingsQ.isLoading || saveMut.isPending}
+              placeholder="10000"
+            />
+            <span className="text-2xl font-semibold text-[#60758B]">円</span>
+          </div>
         </div>
-      )}
 
-      <div className="flex items-center justify-end gap-3">
-        <button
-          type="button"
-          className="h-10 rounded-lg border border-[#C7D6E6] bg-white px-4 text-sm font-semibold text-[#0A2D4D]"
-          onClick={() => nav(-1)}
-        >
-          キャンセル
-        </button>
-        <button
-          type="button"
-          className="h-10 rounded-lg bg-[#1F8EED] px-4 text-sm font-semibold text-white"
-          onClick={() => saveMut.mutate()}
-          disabled={settingsQ.isLoading || saveMut.isPending}
-        >
-          {saveMut.isPending ? "保存中..." : "保存"}
-        </button>
+        {(settingsQ.isError || saveMut.isError) && (
+          <div className="text-sm text-red-600">
+            {((settingsQ.error || saveMut.error) as Error).message}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-3">
+          <button
+            type="button"
+            className="h-12 rounded-2xl border border-[#C8D3DE] bg-white px-8 text-base font-bold text-[#60758B]"
+            onClick={() => nav(-1)}
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            className="h-12 rounded-2xl bg-[#2B8CE6] px-8 text-base font-bold text-white"
+            onClick={() => saveMut.mutate()}
+            disabled={settingsQ.isLoading || saveMut.isPending}
+          >
+            {saveMut.isPending ? "保存中..." : "保存"}
+          </button>
+        </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

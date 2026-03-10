@@ -40,7 +40,7 @@ export function CsvDropzone({ file, onFile, disabled, registerOpenPicker }: Prop
   return (
     <div
       className={`rounded-2xl border-2 border-dashed p-10 text-center ${
-        dragOver ? "bg-[#F4F9FF] border-[#6FAEF2]" : "bg-white border-[#C7D6E6]"
+        dragOver ? "border-[#6FAEF2] bg-[#EAF4FF]" : "border-[#C7D2DE] bg-[#F2F4F7]"
       } ${disabled ? "opacity-60" : ""}`}
       onDragOver={(e) => {
         e.preventDefault();
@@ -50,7 +50,7 @@ export function CsvDropzone({ file, onFile, disabled, registerOpenPicker }: Prop
       onDragLeave={() => setDragOver(false)}
       onDrop={onDrop}
     >
-      <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-[#E8F2FE] text-2xl text-[#1F8EED]">
+      <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-[#DFE9F4] text-2xl text-[#2B8CE6]">
         ⬆
       </div>
 
