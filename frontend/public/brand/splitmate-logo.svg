@@ -1,0 +1,37 @@
+<svg width="640" height="160" viewBox="0 0 640 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="smIcon" x1="26" y1="18" x2="145" y2="136" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#48A2FF"/>
+      <stop offset="1" stop-color="#2B8CE6"/>
+    </linearGradient>
+    <filter id="glow" x="-80" y="-80" width="360" height="320" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g filter="url(#glow)">
+    <path
+      d="M37 102L72 135C84 147 103 147 115 135C128 123 128 103 115 91L76 53C63 41 63 21 76 9C88 -3 107 -3 119 9L145 35M99 70C99 79 106 87 115 87C124 87 131 79 131 70V35"
+      stroke="url(#smIcon)"
+      stroke-width="10"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </g>
+
+  <text
+    x="196"
+    y="105"
+    fill="#0B2D55"
+    font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+    font-size="84"
+    font-weight="700"
+    letter-spacing="-1.2"
+  >
+    SplitMate
+  </text>
+</svg>

@@ -14,10 +14,14 @@ const items: NavItem[] = [
 export function TopNav() {
   return (
     <header className="h-20 border-b border-[#DCE4EE] bg-white/95 backdrop-blur">
-      <div className="mx-auto flex h-full max-w-6xl items-center justify-between px-6">
-        <div className="flex items-center gap-2">
-          <div className="h-5 w-5 rounded-sm bg-[#1F8EED]" />
-          <span className="text-sm font-semibold tracking-wide text-[#23405E]">SplitMate</span>
+      <div className="mx-auto flex h-full w-full max-w-340 items-center justify-between px-8">
+        <div className="flex items-center">
+          <img
+            src="/brand/splitmate-logo.png"
+            alt="SplitMate"
+            className="h-50 w-auto select-none object-contain"
+            draggable={false}
+          />
         </div>
 
         <nav className="flex items-center gap-6 text-sm">
