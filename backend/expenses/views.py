@@ -341,6 +341,9 @@ class RakutenCSVImportView(APIView):
                 excluded_samples,
                 excluded_count,
                 duplicate_count,
+                created_samples,
+                skipped_samples,
+                duplicate_samples,
             ) = import_rakuten_csv(
                 file, default_card_user=default_card_user
             )
@@ -359,6 +362,9 @@ class RakutenCSVImportView(APIView):
                 "excluded_samples": excluded_samples,
                 "excluded_count": excluded_count,
                 "duplicate_count": duplicate_count,
+                "created_samples": created_samples,
+                "skipped_samples": skipped_samples,
+                "duplicate_samples": duplicate_samples,
             },
             status=status.HTTP_201_CREATED,
         )
@@ -400,6 +406,9 @@ class MitsuiCSVImportView(APIView):
                 excluded_samples,
                 excluded_count,
                 duplicate_count,
+                created_samples,
+                skipped_samples,
+                duplicate_samples,
             ) = import_mitsui_csv(file, card_user=card_user)
         except ValueError as exc:
             return Response(
@@ -416,6 +425,9 @@ class MitsuiCSVImportView(APIView):
                 "excluded_samples": excluded_samples,
                 "excluded_count": excluded_count,
                 "duplicate_count": duplicate_count,
+                "created_samples": created_samples,
+                "skipped_samples": skipped_samples,
+                "duplicate_samples": duplicate_samples,
             },
             status=status.HTTP_201_CREATED,
         )

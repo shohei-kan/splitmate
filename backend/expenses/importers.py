@@ -149,7 +149,7 @@ def _match_exclusion_rule(
 def import_rakuten_csv(
     file_obj: IO[bytes],
     default_card_user: str = Expense.CardUser.UNKNOWN,
-) -> Tuple[int, int, List[Dict[str, str]], int, int]:
+) -> Tuple[int, int, List[Dict[str, str]], int, int, List[Dict[str, object]], List[Dict[str, object]], List[Dict[str, object]]]:
     """
     楽天カード CSV をインポートして Expense を bulk_create する。
 
@@ -188,6 +188,9 @@ def import_rakuten_csv(
     duplicate_count = 0
     excluded_samples: List[Dict[str, str]] = []
     excluded_count = 0
+    created_samples: List[Dict[str, object]] = []
+    skipped_samples: List[Dict[str, object]] = []
+    duplicate_samples: List[Dict[str, object]] = []
 
     text = _decode_text_with_fallback(file_obj, ["utf-8-sig", "cp932"])
     reader = csv.DictReader(io.StringIO(text))
@@ -204,6 +207,14 @@ def import_rakuten_csv(
         # 必須3項目が揃っていない行はスキップ
         if not date_str or not store or amount <= 0:
             skipped += 1
+            skipped_samples.append(
+                {
+                    "date": date_str or "",
+                    "store": store or "",
+                    "amount": amount_str or "",
+                    "reason": "invalid_row",
+                }
+            )
             continue
 
         # 利用者 → UI表示用の card_user にマッピング
@@ -219,6 +230,14 @@ def import_rakuten_csv(
             date = _parse_date(date_str)
         except ValueError:
             skipped += 1
+            skipped_samples.append(
+                {
+                    "date": date_str,
+                    "store": store,
+                    "amount": amount_str,
+                    "reason": "invalid_date",
+                }
+            )
             continue
 
         # 1) 除外ルール判定
@@ -234,6 +253,14 @@ def import_rakuten_csv(
             )
             excluded_count += 1
             skipped += 1
+            skipped_samples.append(
+                {
+                    "date": date_str,
+                    "store": store,
+                    "amount": amount_str,
+                    "reason": "excluded_by_rule",
+                }
+            )
             continue
 
         # 2) 重複判定 (DB 既存 + 今回 CSV 内)
@@ -241,6 +268,22 @@ def import_rakuten_csv(
         if key in existing_keys or key in seen_keys:
             duplicate_count += 1
             skipped += 1
+            duplicate_samples.append(
+                {
+                    "date": date_str,
+                    "store": store,
+                    "amount": amount,
+                    "reason": "duplicate",
+                }
+            )
+            skipped_samples.append(
+                {
+                    "date": date_str,
+                    "store": store,
+                    "amount": amount,
+                    "reason": "duplicate",
+                }
+            )
             continue
 
         seen_keys.add(key)
@@ -257,13 +300,29 @@ def import_rakuten_csv(
             status=Expense.Status.DRAFT,
         )
         expenses_to_create.append(expense)
+        created_samples.append(
+            {
+                "date": date_str,
+                "store": store,
+                "amount": amount,
+            }
+        )
 
     created = 0
     if expenses_to_create:
         Expense.objects.bulk_create(expenses_to_create)
         created = len(expenses_to_create)
 
-    return created, skipped, excluded_samples, excluded_count, duplicate_count
+    return (
+        created,
+        skipped,
+        excluded_samples,
+        excluded_count,
+        duplicate_count,
+        created_samples,
+        skipped_samples,
+        duplicate_samples,
+    )
 
 
 # 三井住友カードインポート ----------------------------------------------
@@ -273,7 +332,7 @@ def import_rakuten_csv(
 def import_mitsui_csv(
     file_obj: IO[bytes],
     card_user: str = Expense.CardUser.ME,
-) -> Tuple[int, int, List[Dict[str, str]], int, int]:
+) -> Tuple[int, int, List[Dict[str, str]], int, int, List[Dict[str, object]], List[Dict[str, object]], List[Dict[str, object]]]:
     """
     三井住友カード CSV をインポートして Expense を bulk_create する。
 
@@ -307,6 +366,9 @@ def import_mitsui_csv(
     duplicate_count = 0
     excluded_samples: List[Dict[str, str]] = []
     excluded_count = 0
+    created_samples: List[Dict[str, object]] = []
+    skipped_samples: List[Dict[str, object]] = []
+    duplicate_samples: List[Dict[str, object]] = []
 
     text_stream = (line.decode("cp932", errors="ignore") for line in file_obj)
     reader = csv.reader(text_stream)
@@ -322,6 +384,14 @@ def import_mitsui_csv(
         # フォーマット: YYYY/MM/DD を期待
         if len(date_str) != 10 or date_str[4] != "/" or date_str[7] != "/":
             skipped += 1
+            skipped_samples.append(
+                {
+                    "date": date_str,
+                    "store": row[1].strip() if len(row) > 1 else "",
+                    "amount": row[2].strip() if len(row) > 2 else "",
+                    "reason": "non_data_row",
+                }
+            )
             continue
 
         # B列: 利用店名（必須）
@@ -340,12 +410,28 @@ def import_mitsui_csv(
 
         if not store or amount <= 0:
             skipped += 1
+            skipped_samples.append(
+                {
+                    "date": date_str,
+                    "store": store,
+                    "amount": amount_str,
+                    "reason": "invalid_row",
+                }
+            )
             continue
 
         try:
             date = _parse_date(date_str)
         except ValueError:
             skipped += 1
+            skipped_samples.append(
+                {
+                    "date": date_str,
+                    "store": store,
+                    "amount": amount_str,
+                    "reason": "invalid_date",
+                }
+            )
             continue
 
         # 1) 除外ルール判定
@@ -361,6 +447,14 @@ def import_mitsui_csv(
             )
             excluded_count += 1
             skipped += 1
+            skipped_samples.append(
+                {
+                    "date": date_str,
+                    "store": store,
+                    "amount": amount_str,
+                    "reason": "excluded_by_rule",
+                }
+            )
             continue
 
         # 2) 重複判定
@@ -368,6 +462,22 @@ def import_mitsui_csv(
         if key in existing_keys or key in seen_keys:
             duplicate_count += 1
             skipped += 1
+            duplicate_samples.append(
+                {
+                    "date": date_str,
+                    "store": store,
+                    "amount": amount,
+                    "reason": "duplicate",
+                }
+            )
+            skipped_samples.append(
+                {
+                    "date": date_str,
+                    "store": store,
+                    "amount": amount,
+                    "reason": "duplicate",
+                }
+            )
             continue
 
         seen_keys.add(key)
@@ -384,10 +494,26 @@ def import_mitsui_csv(
             status=Expense.Status.DRAFT,
         )
         expenses_to_create.append(expense)
+        created_samples.append(
+            {
+                "date": date_str,
+                "store": store,
+                "amount": amount,
+            }
+        )
 
     created = 0
     if expenses_to_create:
         Expense.objects.bulk_create(expenses_to_create)
         created = len(expenses_to_create)
 
-    return created, skipped, excluded_samples, excluded_count, duplicate_count
+    return (
+        created,
+        skipped,
+        excluded_samples,
+        excluded_count,
+        duplicate_count,
+        created_samples,
+        skipped_samples,
+        duplicate_samples,
+    )
