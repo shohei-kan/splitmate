@@ -6,7 +6,7 @@ from rest_framework import viewsets, filters, parsers, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
-from .models import Expense, ExclusionRule
+from .models import AppSettings, Expense, ExclusionRule
 from .serializers import (
     ExpenseSerializer,
     MonthlySummarySerializer,
@@ -14,8 +14,16 @@ from .serializers import (
     MonthlyCategorySummarySerializer,
     MonthlySummaryListSerializer,
     ExclusionRuleSerializer,
+    AppSettingsSerializer,
     )
 from .importers import import_rakuten_csv, import_mitsui_csv
+
+
+def _get_or_create_app_settings() -> AppSettings:
+    settings = AppSettings.objects.order_by("id").first()
+    if settings:
+        return settings
+    return AppSettings.objects.create()
 
 
 class ExpenseViewSet(viewsets.ModelViewSet):
@@ -582,3 +590,22 @@ class MonthlyCategorySummaryView(APIView):
 
         serializer = MonthlyCategorySummarySerializer(summary)
         return Response(serializer.data)
+
+
+class AppSettingsView(APIView):
+    """
+    GET /api/settings/
+    PUT /api/settings/
+    """
+
+    def get(self, request, *args, **kwargs):
+        settings = _get_or_create_app_settings()
+        serializer = AppSettingsSerializer(settings)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, *args, **kwargs):
+        settings = _get_or_create_app_settings()
+        serializer = AppSettingsSerializer(settings, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)

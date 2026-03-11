@@ -120,3 +120,17 @@ class ExclusionRule(models.Model):
 
     def __str__(self) -> str:
         return f"[{self.target_source}] {self.keyword}"
+
+
+class AppSettings(models.Model):
+    excluded_words = models.JSONField(default=list, blank=True)
+    highlight_threshold = models.PositiveIntegerField(default=10000)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "App settings"
+        verbose_name_plural = "App settings"
+
+    def __str__(self) -> str:
+        return "AppSettings"

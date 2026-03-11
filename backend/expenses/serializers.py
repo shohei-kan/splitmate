@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Expense, ExclusionRule
+from .models import AppSettings, Expense, ExclusionRule
 import datetime  
 
 class ExpenseSerializer(serializers.ModelSerializer):
@@ -105,4 +105,18 @@ class ExclusionRuleSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]    
-    
+
+
+class AppSettingsSerializer(serializers.ModelSerializer):
+    excluded_words = serializers.ListField(
+        child=serializers.CharField(allow_blank=False),
+        required=False,
+    )
+    highlight_threshold = serializers.IntegerField(min_value=1, required=False)
+
+    class Meta:
+        model = AppSettings
+        fields = [
+            "excluded_words",
+            "highlight_threshold",
+        ]
