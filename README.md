@@ -124,6 +124,48 @@ npm run preview
 - `POST /api/import/mitsui/?card_user=me|wife|unknown`（multipart の `file` 必須）
 - `POST /api/month/status/`
 
+### Expense 更新（PATCH）
+
+`PATCH /api/expenses/{id}/`
+
+更新可能フィールド:
+
+- `date`
+- `store`
+- `amount`
+- `card_user`
+- `payer`
+- `burden_type`
+- `category`
+- `memo`
+
+更新不可フィールド:
+
+- `id`
+- `source`
+- `status`
+- `created_at`
+- `updated_at`
+
+バリデーション:
+
+- `amount` は 1 以上
+- `store` は空文字・空白のみ不可
+
+リクエスト例:
+
+```json
+{
+  "category": "food",
+  "burden_type": "shared",
+  "memo": "週末の買い出し"
+}
+```
+
+注意:
+
+- `read_only_fields` に含まれる項目は送信しても更新されません（`backend/expenses/serializers.py` が source of truth）。
+
 ### CSV import レスポンス契約（`/api/import/rakuten/`, `/api/import/mitsui/`）
 
 ImportResult は counts と samples を返します。
