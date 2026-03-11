@@ -85,22 +85,6 @@ function labelPayer(v: Expense["payer"] | null | undefined) {
   return "不明";
 }
 
-function labelCategory(v: Expense["category"]) {
-  if (v === "food") return "食費";
-  if (v === "daily") return "日用品";
-  if (v === "outside_food") return "外食";
-  if (v === "utility") return "光熱費";
-  if (v === "travel") return "旅行";
-  if (v === "other") return "その他";
-  return "未分類";
-}
-
-function labelBurdenType(v: Expense["burden_type"]) {
-  if (v === "shared") return "共有支出";
-  if (v === "wife_only") return "ママ個人";
-  return "パパ個人";
-}
-
 function cardUserBadgeClass(v: Expense["card_user"] | null | undefined) {
   if (v === "me") return "bg-[#E8F4FF] text-[#1D5EA8]";
   if (v === "wife") return "bg-[#FCEAF1] text-[#B94F76]";
@@ -127,6 +111,30 @@ function burdenBadgeClass(v: Expense["burden_type"]) {
   if (v === "shared") return "bg-[#2B8CE6] text-white";
   if (v === "wife_only") return "bg-[#FADDE7] text-[#E36D94]";
   return "bg-[#ECEEF1] text-[#5D6C7B]";
+}
+
+const CATEGORY_OPTIONS: Array<{ value: Category; label: string }> = [
+  { value: "uncategorized", label: "未分類" },
+  { value: "food", label: "食費" },
+  { value: "daily", label: "日用品" },
+  { value: "outside_food", label: "外食" },
+  { value: "utility", label: "光熱費" },
+  { value: "travel", label: "旅行" },
+  { value: "other", label: "その他" },
+];
+
+const BURDEN_TYPE_OPTIONS: Array<{ value: BurdenType; label: string }> = [
+  { value: "shared", label: "共有支出" },
+  { value: "wife_only", label: "ママ個人" },
+  { value: "me_only", label: "パパ個人" },
+];
+
+function categoryLabel(value: Category) {
+  return CATEGORY_OPTIONS.find((option) => option.value === value)?.label ?? "未分類";
+}
+
+function burdenTypeLabel(value: BurdenType) {
+  return BURDEN_TYPE_OPTIONS.find((option) => option.value === value)?.label ?? "共有支出";
 }
 
 function labelSource(v: Expense["source"]) {
@@ -316,6 +324,10 @@ export function HomePage() {
       });
     },
   });
+  const inlineUpdateMutation = useMutation({
+    mutationFn: ({ id, input }: { id: number; input: UpdateExpenseInput }) =>
+      updateExpense(id, input),
+  });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteExpense(id),
@@ -356,6 +368,98 @@ export function HomePage() {
     !!editForm.amount &&
     Number.isFinite(Number(editForm.amount)) &&
     Number(editForm.amount) > 0;
+  const [savingRowIds, setSavingRowIds] = useState<number[]>([]);
+  const [inlineErrors, setInlineErrors] = useState<Record<number, string>>({});
+  const [inlineDrafts, setInlineDrafts] = useState<
+    Record<number, { category?: Category; burden_type?: BurdenType }>
+  >({});
+  const [editingCell, setEditingCell] = useState<
+    { id: number; field: "category" | "burden_type" } | null
+  >(null);
+
+  const setRowSaving = (id: number, isSaving: boolean) => {
+    setSavingRowIds((prev) => {
+      if (isSaving) {
+        if (prev.includes(id)) return prev;
+        return [...prev, id];
+      }
+      return prev.filter((rowId) => rowId !== id);
+    });
+  };
+
+  const setInlineDraftField = (
+    id: number,
+    field: "category" | "burden_type",
+    value?: Category | BurdenType
+  ) => {
+    setInlineDrafts((prev) => {
+      const current = prev[id] ?? {};
+      const next = { ...current };
+      if (value === undefined) {
+        delete next[field];
+      } else if (field === "category") {
+        next.category = value as Category;
+      } else {
+        next.burden_type = value as BurdenType;
+      }
+
+      if (!next.category && !next.burden_type) {
+        const rest = { ...prev };
+        delete rest[id];
+        return rest;
+      }
+      return { ...prev, [id]: next };
+    });
+  };
+
+  const saveInlineField = (
+    id: number,
+    field: "category" | "burden_type",
+    value: Category | BurdenType
+  ) => {
+    const input: UpdateExpenseInput =
+      field === "category"
+        ? { category: value as Category }
+        : { burden_type: value as BurdenType };
+
+    setInlineErrors((prev) => {
+      const rest = { ...prev };
+      delete rest[id];
+      return rest;
+    });
+    setInlineDraftField(id, field, value);
+    setRowSaving(id, true);
+
+    inlineUpdateMutation.mutate(
+      { id, input },
+      {
+        onSuccess: () => {
+          setRowSaving(id, false);
+          setInlineDraftField(id, field, undefined);
+          setEditingCell((prev) =>
+            prev && prev.id === id && prev.field === field ? null : prev
+          );
+          queryClient.invalidateQueries({
+            queryKey: qk.summaryMonth(targetYM.year, targetYM.month),
+          });
+          queryClient.invalidateQueries({
+            queryKey: qk.expensesMonth(targetYM.year, targetYM.month),
+          });
+        },
+        onError: (error) => {
+          setRowSaving(id, false);
+          setInlineDraftField(id, field, undefined);
+          setEditingCell((prev) =>
+            prev && prev.id === id && prev.field === field ? null : prev
+          );
+          setInlineErrors((prev) => ({
+            ...prev,
+            [id]: (error as Error).message,
+          }));
+        },
+      }
+    );
+  };
 
   return (
     <PageShell>
@@ -474,13 +578,11 @@ export function HomePage() {
                 setForm((p) => ({ ...p, category: e.target.value as Category }))
               }
             >
-              <option value="uncategorized">カテゴリ: 未分類</option>
-              <option value="food">カテゴリ: 食費</option>
-              <option value="daily">カテゴリ: 日用品</option>
-              <option value="outside_food">カテゴリ: 外食</option>
-              <option value="utility">カテゴリ: 光熱費</option>
-              <option value="travel">カテゴリ: 旅行</option>
-              <option value="other">カテゴリ: その他</option>
+              {CATEGORY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  カテゴリ: {option.label}
+                </option>
+              ))}
             </select>
             <input
               className="h-11 rounded-xl border border-[#D1DCE8] bg-white px-4 text-base placeholder:text-[#91A2B4]"
@@ -555,7 +657,16 @@ export function HomePage() {
                     </td>
                   </tr>
                 ) : (
-                  rows.map((e) => (
+                  rows.map((e) => {
+                    const rowSaving = savingRowIds.includes(e.id);
+                    const currentCategory = inlineDrafts[e.id]?.category ?? e.category;
+                    const currentBurdenType = inlineDrafts[e.id]?.burden_type ?? e.burden_type;
+                    const isEditingCategory =
+                      editingCell?.id === e.id && editingCell.field === "category";
+                    const isEditingBurdenType =
+                      editingCell?.id === e.id && editingCell.field === "burden_type";
+
+                    return (
                     <tr key={e.id} className="border-b border-[#EEF3F8] last:border-b-0 hover:bg-[#FAFCFF]">
                       <td className="whitespace-nowrap px-6 py-4 text-base text-[#4D6278]">{e.date}</td>
                       <td className="min-w-55 px-6 py-4 text-base text-[#1A395B]">{e.store}</td>
@@ -578,22 +689,130 @@ export function HomePage() {
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-6 py-4 text-base text-[#596F85]">
-                        <span
-                          className={`inline-flex items-center rounded-xl px-3 py-1 text-sm font-semibold ${categoryBadgeClass(
-                            e.category
-                          )}`}
-                        >
-                          {labelCategory(e.category)}
-                        </span>
+                        {isEditingCategory ? (
+                          <select
+                            autoFocus
+                            className={`h-9 min-w-22 rounded-xl border border-transparent px-3 py-1 text-sm font-semibold ${categoryBadgeClass(
+                              currentCategory
+                            )}`}
+                            value={currentCategory}
+                            disabled={rowSaving}
+                            onBlur={() =>
+                              setEditingCell((prev) =>
+                                prev && prev.id === e.id && prev.field === "category"
+                                  ? null
+                                  : prev
+                              )
+                            }
+                            onKeyDown={(ev) => {
+                              if (ev.key === "Escape") {
+                                ev.preventDefault();
+                                setEditingCell(null);
+                              }
+                            }}
+                            onChange={(ev) => {
+                              const nextCategory = ev.target.value as Category;
+                              if (nextCategory === e.category) return;
+                              saveInlineField(e.id, "category", nextCategory);
+                            }}
+                          >
+                            {CATEGORY_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <button
+                            type="button"
+                            className={`inline-flex h-9 min-w-22 items-center rounded-xl px-3 py-1 text-sm font-semibold ${categoryBadgeClass(
+                              currentCategory
+                            )} ${rowSaving ? "cursor-not-allowed opacity-60" : ""}`}
+                            aria-label="カテゴリを編集"
+                            aria-haspopup="listbox"
+                            aria-expanded={isEditingCategory}
+                            title="カテゴリを編集"
+                            disabled={rowSaving}
+                            onMouseDown={(ev) => {
+                              ev.preventDefault();
+                              if (rowSaving) return;
+                              setEditingCell({ id: e.id, field: "category" });
+                            }}
+                            onClick={() => {}}
+                            onKeyDown={(ev) => {
+                              if ((ev.key === "Enter" || ev.key === " ") && !rowSaving) {
+                                ev.preventDefault();
+                                setEditingCell({ id: e.id, field: "category" });
+                              }
+                            }}
+                          >
+                            {categoryLabel(currentCategory)}
+                            <span className="ml-1">▾</span>
+                          </button>
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-6 py-4">
-                        <span
-                          className={`inline-flex items-center rounded-xl px-3 py-1 text-sm font-semibold ${burdenBadgeClass(
-                            e.burden_type
-                          )}`}
-                        >
-                          {labelBurdenType(e.burden_type)}
-                        </span>
+                        {isEditingBurdenType ? (
+                          <select
+                            autoFocus
+                            className={`h-9 min-w-24 rounded-xl border border-transparent px-3 py-1 text-sm font-semibold ${burdenBadgeClass(
+                              currentBurdenType
+                            )}`}
+                            value={currentBurdenType}
+                            disabled={rowSaving}
+                            onBlur={() =>
+                              setEditingCell((prev) =>
+                                prev && prev.id === e.id && prev.field === "burden_type"
+                                  ? null
+                                  : prev
+                              )
+                            }
+                            onKeyDown={(ev) => {
+                              if (ev.key === "Escape") {
+                                ev.preventDefault();
+                                setEditingCell(null);
+                              }
+                            }}
+                            onChange={(ev) => {
+                              const nextBurdenType = ev.target.value as BurdenType;
+                              if (nextBurdenType === e.burden_type) return;
+                              saveInlineField(e.id, "burden_type", nextBurdenType);
+                            }}
+                          >
+                            {BURDEN_TYPE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <button
+                            type="button"
+                            className={`inline-flex h-9 min-w-24 items-center rounded-xl px-3 py-1 text-sm font-semibold ${burdenBadgeClass(
+                              currentBurdenType
+                            )} ${rowSaving ? "cursor-not-allowed opacity-60" : ""}`}
+                            aria-label="負担区分を編集"
+                            aria-haspopup="listbox"
+                            aria-expanded={isEditingBurdenType}
+                            title="負担区分を編集"
+                            disabled={rowSaving}
+                            onMouseDown={(ev) => {
+                              ev.preventDefault();
+                              if (rowSaving) return;
+                              setEditingCell({ id: e.id, field: "burden_type" });
+                            }}
+                            onClick={() => {}}
+                            onKeyDown={(ev) => {
+                              if ((ev.key === "Enter" || ev.key === " ") && !rowSaving) {
+                                ev.preventDefault();
+                                setEditingCell({ id: e.id, field: "burden_type" });
+                              }
+                            }}
+                          >
+                            {burdenTypeLabel(currentBurdenType)}
+                            <span className="ml-1">▾</span>
+                          </button>
+                        )}
                       </td>
                       <td
                         className={`whitespace-nowrap px-6 py-4 text-right text-base font-semibold ${
@@ -611,10 +830,8 @@ export function HomePage() {
                           <button
                             type="button"
                             className="rounded-md px-2 py-1 text-sm font-semibold text-[#60758B] hover:bg-[#EEF4FB] hover:text-[#2B8CE6] disabled:cursor-not-allowed disabled:opacity-45"
-                            title={e.source === "manual" ? "登録内容を編集" : "手入力のみ編集できます"}
-                            disabled={e.source !== "manual"}
+                            title="登録内容を編集"
                             onClick={() => {
-                              if (e.source !== "manual") return;
                               setEditForm({
                                 id: e.id,
                                 date: e.date,
@@ -659,9 +876,15 @@ export function HomePage() {
                             </svg>
                           </button>
                         </div>
+                        {rowSaving && (
+                          <div className="mt-1 text-xs text-[#6A7C8E]">保存中...</div>
+                        )}
+                        {inlineErrors[e.id] && (
+                          <div className="mt-1 text-xs text-red-600">{inlineErrors[e.id]}</div>
+                        )}
                       </td>
                     </tr>
-                  ))
+                  )})
                 )}
               </tbody>
             </table>
@@ -787,9 +1010,11 @@ export function HomePage() {
                       setEditForm((p) => (p ? { ...p, burden_type: e.target.value as BurdenType } : p))
                     }
                   >
-                    <option value="shared">共有支出</option>
-                    <option value="wife_only">ママ個人</option>
-                    <option value="me_only">パパ個人</option>
+                    {BURDEN_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
                 </label>
 
@@ -802,13 +1027,11 @@ export function HomePage() {
                       setEditForm((p) => (p ? { ...p, category: e.target.value as Category } : p))
                     }
                   >
-                    <option value="uncategorized">未分類</option>
-                    <option value="food">食費</option>
-                    <option value="daily">日用品</option>
-                    <option value="outside_food">外食</option>
-                    <option value="utility">光熱費</option>
-                    <option value="travel">旅行</option>
-                    <option value="other">その他</option>
+                    {CATEGORY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
                 </label>
 

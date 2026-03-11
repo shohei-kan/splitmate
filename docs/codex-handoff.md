@@ -1,60 +1,61 @@
 # Codex作業サマリー
 
 ## 1. 今回の目的
-- CSV import API 契約（`*_samples.amount`/`raw_amount`/`reason`/`date`）を docs に明文化する
+- HomePage のカテゴリ/負担区分インライン編集を 1クリックで開きやすくする（badge→select）
 
 ## 2. 確認した状況
-- `README.md` に API エンドポイント一覧はあるが、CSV import の samples の型契約は未記載だった
-- docs には API 専用ファイルが無いため、最小変更で `README.md` 追記が適切
+- 現状の badge は `onClick` で編集開始しており、クリックフロー上で2クリック必要になるケースがあった
+- 保存処理（onChange即PATCH）、onBlurで閉じる、Escapeで閉じる、savingRowIds/inlineErrors/invalidate は既に実装済み
 - 関連ファイル:
-  - `README.md`
+  - `frontend/src/pages/HomePage.tsx`
 
 ## 3. 原因
 ### 確定
-- backend/frontendで合意済みの仕様（`amount: number|null`, `raw_amount` 併記）がドキュメント化されていなかった
+- `onClick` で編集開始すると、フォーカス遷移タイミングの影響で「select表示後にもう1回操作」が必要になる場合があった
 
 ### 仮説
 - なし
 
 ## 4. 実施した変更
 - 変更したファイル一覧:
-  - `README.md`
+  - `frontend/src/pages/HomePage.tsx`
   - `docs/codex-handoff.md`
 - 各ファイルで何を変えたか:
-  - `README.md`
-    - `API エンドポイント` セクション内に
-      - `CSV import レスポンス契約` の新節を追加
-      - ImportSample shape
-      - `amount` / `raw_amount` / `date` / `reason` の契約
-      - `curl` リクエスト例（multipart）
-      - 短いレスポンス例（samplesは1件ずつ）
-      - 移行注意点（旧 string 混在 → 現在 number|null）
+  - `frontend/src/pages/HomePage.tsx`
+    - category badge button
+      - 編集開始イベントを `onClick` から `onMouseDown` に変更
+      - `onMouseDown` 内で `e.preventDefault()` + `setEditingCell(...)`
+      - `onClick` は no-op に変更
+      - Enter/Space キーでも編集開始できるよう `onKeyDown` を追加（既存キーボード操作維持）
+    - burden_type badge button
+      - 上記と同様の変更を適用
+    - 既存の保存処理・invalidate・onBlur/Escape・savingRowIds/inlineErrors は変更なし
   - `docs/codex-handoff.md`
     - 本サマリーへ更新
 - 破壊的変更:
-  - なし（ドキュメントのみ）
+  - なし
 
 ## 5. テスト・確認結果
 - 実行したコマンド:
-  - `ls -la /Users/kannoshouhei/dev/splitmate && find /Users/kannoshouhei/dev/splitmate/docs -maxdepth 2 -type f | sort`
-  - `sed -n '1,260p' /Users/kannoshouhei/dev/splitmate/README.md`
+  - `npm run build`（`frontend/`）
 - 成功したこと:
-  - 追記先を `README.md` に確定し、契約情報を追加
+  - build成功（`tsc -b && vite build`）
+  - クリック開始の改善実装を反映
 - 失敗したこと:
   - なし
 - 未実施の確認:
-  - CI/テスト実行（ドキュメント変更のみのため未実施）
+  - ブラウザでの実クリック体感確認（1クリックで開くか）
 
 ## 6. 未解決事項
 - なし
 
 ## 7. 次にやるなら
-1. `README.md` の CSV契約節から backend 実装ファイルへの参照リンク（関数名）を追記
-2. frontend の `ImportResult` / sample 型を `unknown[]` から明示型へ更新
-3. API変更時の更新漏れ防止のため、契約チェック用の簡易テストを追加
+1. 実ブラウザで1クリック開閉の体感確認
+2. 必要なら `onPointerDown` 採用の比較検証
+3. セル編集中のフォーカスリング見た目を微調整
 
 ## 8. ChatGPTに相談したいこと
 - なし
 
 ## 9. ChatGPTに次に頼む依頼文
-- README に追加した CSV import 契約を前提に、frontend 側の `ImportResult` と sample 型定義を安全に厳密化する最小差分を提案してください。
+- Home のインライン編集セルで `onMouseDown` と `onPointerDown` のどちらが安全か、React/Tailwind前提で最小比較案をください。
