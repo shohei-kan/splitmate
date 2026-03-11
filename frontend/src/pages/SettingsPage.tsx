@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { updateSettings } from "../api/settings";
@@ -22,6 +22,7 @@ export function SettingsPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const settingsQ = useSettings();
+  const successTimerRef = useRef<number | null>(null);
 
   const baseExcludedWordsText = useMemo(
     () => toTextarea(settingsQ.data?.excluded_words ?? []),
@@ -34,31 +35,68 @@ export function SettingsPage() {
 
   const [excludedWordsDraft, setExcludedWordsDraft] = useState<string | null>(null);
   const [thresholdDraft, setThresholdDraft] = useState<string | null>(null);
+  const [thresholdError, setThresholdError] = useState<string | null>(null);
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
 
   const excludedWordsText = excludedWordsDraft ?? baseExcludedWordsText;
   const thresholdText = thresholdDraft ?? baseThresholdText;
 
-  const currentInput = useMemo(
-    () => ({
-      excluded_words: fromTextarea(excludedWordsText),
-      highlight_threshold: Number.isFinite(Number(thresholdText))
-        ? Number(thresholdText)
-        : DEFAULT_HIGHLIGHT_THRESHOLD,
-    }),
-    [excludedWordsText, thresholdText]
+  const validateThresholdInput = (value: string) => {
+    const normalized = value.trim().normalize("NFKC");
+    if (normalized.length === 0) return null;
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed)) return "数値で入力してください";
+    if (parsed < 1) return "1以上で入力してください";
+    return null;
+  };
+
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current !== null) {
+        window.clearTimeout(successTimerRef.current);
+      }
+    };
+  }, []);
+
+  const currentExcludedWords = useMemo(
+    () => fromTextarea(excludedWordsText),
+    [excludedWordsText]
   );
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      const saved = await updateSettings(currentInput);
-      await syncAllSourceExclusionRules(currentInput.excluded_words);
+      setSaveSuccessMessage(null);
+      const thresholdValidationError = validateThresholdInput(thresholdText);
+      if (thresholdValidationError) {
+        setThresholdError(thresholdValidationError);
+        throw new Error(thresholdValidationError);
+      }
+
+      const normalizedThresholdText = thresholdText.trim().normalize("NFKC");
+      const parsedThreshold = Number(normalizedThresholdText);
+      setThresholdError(null);
+
+      const payload = {
+        excluded_words: currentExcludedWords,
+        highlight_threshold: parsedThreshold,
+      };
+
+      const saved = await updateSettings(payload);
+      await syncAllSourceExclusionRules(payload.excluded_words);
       return saved;
     },
     onSuccess: (saved) => {
       qc.setQueryData(qk.settings(), saved);
       setExcludedWordsDraft(null);
       setThresholdDraft(null);
-      nav("/");
+      setThresholdError(null);
+      setSaveSuccessMessage("設定を保存しました");
+      if (successTimerRef.current !== null) {
+        window.clearTimeout(successTimerRef.current);
+      }
+      successTimerRef.current = window.setTimeout(() => {
+        setSaveSuccessMessage(null);
+      }, 2000);
     },
   });
 
@@ -87,15 +125,22 @@ export function SettingsPage() {
           <div className="mt-2 text-base text-[#6A7C8E]">この金額以上の支出を赤色で強調表示します</div>
           <div className="mt-3 flex items-center gap-2">
             <input
-              className="h-12 w-full max-w-42.5 rounded-xl border border-[#CFD8E3] bg-white px-4 text-base text-[#163A5E]"
+              className={`h-12 w-full max-w-42.5 rounded-xl border bg-white px-4 text-base text-[#163A5E] ${
+                thresholdError ? "border-red-500" : "border-[#CFD8E3]"
+              }`}
               inputMode="numeric"
               value={thresholdText}
-              onChange={(e) => setThresholdDraft(e.target.value.replace(/[^\d]/g, ""))}
+              onChange={(e) => {
+                const next = e.target.value;
+                setThresholdDraft(next);
+                setThresholdError(validateThresholdInput(next));
+              }}
               disabled={settingsQ.isLoading || saveMut.isPending}
               placeholder="10000"
             />
             <span className="text-2xl font-semibold text-[#60758B]">円</span>
           </div>
+          {thresholdError && <div className="mt-1 text-sm text-red-600">{thresholdError}</div>}
         </div>
 
         {(settingsQ.isError || saveMut.isError) && (
@@ -121,6 +166,9 @@ export function SettingsPage() {
             {saveMut.isPending ? "保存中..." : "保存"}
           </button>
         </div>
+        {saveSuccessMessage && (
+          <div className="text-right text-sm text-green-700">{saveSuccessMessage}</div>
+        )}
       </div>
     </PageShell>
   );
