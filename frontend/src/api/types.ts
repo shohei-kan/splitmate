@@ -53,10 +53,18 @@ export type ImportResult = {
   skipped: number;
   excluded_count: number;
   duplicate_count: number;
-  excluded_samples?: Array<unknown>;
-  created_samples?: Array<unknown>;
-  skipped_samples?: Array<unknown>;
-  duplicate_samples?: Array<unknown>;
+  excluded_samples: ImportSample[];
+  created_samples: ImportSample[];
+  skipped_samples: ImportSample[];
+  duplicate_samples: ImportSample[];
+};
+
+export type ImportSample = {
+  date: string;
+  store: string;
+  amount: number | null;
+  raw_amount?: string | null;
+  reason?: string | null;
 };
 
 export type ExclusionRule = {

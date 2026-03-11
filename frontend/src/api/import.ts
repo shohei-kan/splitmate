@@ -7,7 +7,10 @@ function buildImportForm(file: File) {
   return fd;
 }
 
-export function importRakutenCsv(file: File, cardUser: CardUser) {
+export function importRakutenCsv(
+  file: File,
+  cardUser: CardUser
+): Promise<ImportResult> {
   const fd = buildImportForm(file);
   return apiFetch<ImportResult>(`/api/import/rakuten/?card_user=${cardUser}`, {
     method: "POST",
@@ -18,7 +21,10 @@ export function importRakutenCsv(file: File, cardUser: CardUser) {
   });
 }
 
-export function importMitsuiCsv(file: File, cardUser: CardUser) {
+export function importMitsuiCsv(
+  file: File,
+  cardUser: CardUser
+): Promise<ImportResult> {
   const fd = buildImportForm(file);
   return apiFetch<ImportResult>(`/api/import/mitsui/?card_user=${cardUser}`, {
     method: "POST",

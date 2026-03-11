@@ -3,14 +3,29 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getInitialYearMonth, shiftMonth } from "../lib/month";
 import { importMitsuiCsv, importRakutenCsv } from "../api/import";
-import type { CardUser, ImportResult } from "../api/types";
+import type { CardUser, ImportResult, ImportSample } from "../api/types";
 import { CsvDropzone } from "../components/import/CsvDropzone";
 import { qk } from "../lib/queryKeys";
 import { PageShell } from "../components/layout/PageShell";
 import { coerceSample } from "../lib/importSample";
 
 type CardKind = "rakuten" | "mitsui";
-type DetailKey = "created" | "skipped" | "excluded" | "duplicate";
+type SampleKind = "created" | "skipped" | "excluded" | "duplicate";
+const MAX_PREVIEW = 10;
+
+const detailTitleByKind: Record<SampleKind, string> = {
+  created: "新規登録の明細",
+  skipped: "スキップの明細",
+  excluded: "除外された明細（例）",
+  duplicate: "重複の明細",
+};
+
+const badgeDefs: Array<{ kind: SampleKind; label: string }> = [
+  { kind: "created", label: "新規登録" },
+  { kind: "skipped", label: "スキップ" },
+  { kind: "excluded", label: "除外" },
+  { kind: "duplicate", label: "重複" },
+];
 
 function ymLabel(year: number, month: number) {
   return `${year}年${String(month).padStart(2, "0")}月`;
@@ -46,7 +61,34 @@ export function CsvImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [showAllExcluded, setShowAllExcluded] = useState(false);
-  const [activeDetail, setActiveDetail] = useState<DetailKey | null>(null);
+  const [activeDetail, setActiveDetail] = useState<SampleKind | null>(null);
+
+  const samplesByKind = useMemo<Record<SampleKind, ImportSample[]>>(
+    () => ({
+      created: result?.created_samples ?? [],
+      skipped: result?.skipped_samples ?? [],
+      excluded: result?.excluded_samples ?? [],
+      duplicate: result?.duplicate_samples ?? [],
+    }),
+    [result]
+  );
+
+  const countsByKind = useMemo<Record<SampleKind, number>>(
+    () => ({
+      created: result?.created ?? 0,
+      skipped: result?.skipped ?? 0,
+      excluded: result?.excluded_count ?? 0,
+      duplicate: result?.duplicate_count ?? 0,
+    }),
+    [result]
+  );
+
+  const getViewRows = (kind: SampleKind | null) => {
+    if (!kind) return [];
+    const all = samplesByKind[kind];
+    const limited = showAllExcluded ? all : all.slice(0, MAX_PREVIEW);
+    return limited.map((sample) => coerceSample(sample));
+  };
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -66,6 +108,15 @@ export function CsvImportPage() {
   const goMonth = (delta: number) => {
     const next = shiftMonth(ym.year, ym.month, delta);
     setYM(next.year, next.month);
+  };
+
+  const toggleDetail = (kind: SampleKind) => {
+    setActiveDetail((prev) => (prev === kind ? null : kind));
+  };
+
+  const handleDetailBadgeClick = (kind: SampleKind) => {
+    setShowAllExcluded(false);
+    toggleDetail(kind);
   };
 
   return (
@@ -146,54 +197,26 @@ export function CsvImportPage() {
               <div className="rounded-xl border border-[#CFD8E3] bg-white p-3">
                 <div className="mb-2 text-sm font-bold text-[#0A2D4D]">取り込み結果</div>
                 {(() => {
-                  const allSamples = getDetailSamples(result, activeDetail);
-                  const allRows = allSamples.map(coerceSample);
-                  const visibleRows = showAllExcluded ? allRows : allRows.slice(0, 10);
+                  const allSamples = activeDetail ? samplesByKind[activeDetail] : [];
+                  const visibleRows = getViewRows(activeDetail);
                   return (
                     <>
                       <div className="flex flex-wrap gap-2">
-                        <BadgeButton
-                          label="新規登録"
-                          value={result.created}
-                          active={activeDetail === "created"}
-                          onClick={() => {
-                            setShowAllExcluded(false);
-                            setActiveDetail((prev) => (prev === "created" ? null : "created"));
-                          }}
-                        />
-                        <BadgeButton
-                          label="スキップ"
-                          value={result.skipped}
-                          active={activeDetail === "skipped"}
-                          onClick={() => {
-                            setShowAllExcluded(false);
-                            setActiveDetail((prev) => (prev === "skipped" ? null : "skipped"));
-                          }}
-                        />
-                        <BadgeButton
-                          label="除外"
-                          value={result.excluded_count}
-                          active={activeDetail === "excluded"}
-                          onClick={() => {
-                            setShowAllExcluded(false);
-                            setActiveDetail((prev) => (prev === "excluded" ? null : "excluded"));
-                          }}
-                        />
-                        <BadgeButton
-                          label="重複"
-                          value={result.duplicate_count}
-                          active={activeDetail === "duplicate"}
-                          onClick={() => {
-                            setShowAllExcluded(false);
-                            setActiveDetail((prev) => (prev === "duplicate" ? null : "duplicate"));
-                          }}
-                        />
+                        {badgeDefs.map((badge) => (
+                          <BadgeButton
+                            key={badge.kind}
+                            label={badge.label}
+                            value={countsByKind[badge.kind]}
+                            active={activeDetail === badge.kind}
+                            onClick={() => handleDetailBadgeClick(badge.kind)}
+                          />
+                        ))}
                       </div>
 
                       {activeDetail && allSamples.length > 0 && (
                         <div className="mt-4 rounded-lg border border-[#DDE6F0] bg-[#FAFCFF] p-3">
                           <div className="text-sm font-semibold text-[#0A2D4D]">
-                            {detailTitle(activeDetail)}
+                            {detailTitleByKind[activeDetail]}
                           </div>
                           <div className="mt-1 text-xs text-[#617488]">
                             {activeDetail === "excluded"
@@ -232,7 +255,7 @@ export function CsvImportPage() {
                             </table>
                           </div>
 
-                          {allSamples.length > 10 && (
+                          {allSamples.length > MAX_PREVIEW && (
                             <div className="mt-3">
                               <button
                                 type="button"
@@ -330,19 +353,4 @@ function BadgeButton({
       <span>{value}件</span>
     </button>
   );
-}
-
-function detailTitle(key: DetailKey) {
-  if (key === "created") return "新規登録の明細";
-  if (key === "skipped") return "スキップの明細";
-  if (key === "excluded") return "除外された明細（例）";
-  return "重複の明細";
-}
-
-function getDetailSamples(result: ImportResult, key: DetailKey | null): Array<unknown> {
-  if (!key) return [];
-  if (key === "created") return result.created_samples ?? [];
-  if (key === "skipped") return result.skipped_samples ?? [];
-  if (key === "duplicate") return result.duplicate_samples ?? [];
-  return result.excluded_samples ?? [];
 }
