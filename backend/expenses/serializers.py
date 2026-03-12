@@ -3,6 +3,8 @@ from .models import AppSettings, Expense, ExclusionRule
 import datetime  
 
 class ExpenseSerializer(serializers.ModelSerializer):
+    amount = serializers.IntegerField(min_value=1)
+
     class Meta:
         model = Expense
         fields = [
@@ -27,6 +29,12 @@ class ExpenseSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at"
         ]
+
+    def validate_store(self, value: str) -> str:
+        store = value.strip()
+        if not store:
+            raise serializers.ValidationError("store は空にできません。")
+        return store
 
 #月別サマリー
 class MonthlySummarySerializer(serializers.Serializer):

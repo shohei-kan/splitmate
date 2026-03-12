@@ -2,7 +2,7 @@ import csv
 import datetime
 import io
 import unicodedata
-from typing import IO, Dict, List, Tuple
+from typing import IO, Dict, List, Optional, Tuple
 
 from django.db import transaction
 from django.db.models import Q
@@ -48,7 +48,7 @@ def _parse_amount(amount_str: str) -> int:
         return 0
 
 
-def _parse_amount_for_sample(value: object) -> int | None:
+def _parse_amount_for_sample(value: object) -> Optional[int]:
     """
     samples レスポンス用の金額正規化。
     返却値は必ず int か None。
@@ -149,7 +149,7 @@ def _load_exclusion_rules(source: str) -> List[ExclusionRule]:
 def _match_exclusion_rule(
     store: str,
     rules: List[ExclusionRule],
-) -> ExclusionRule | None:
+) -> Optional[ExclusionRule]:
     """
     store と除外ルールの keyword を正規化して部分一致判定する。
     全角/半角・大文字小文字・スペース違いを吸収。
