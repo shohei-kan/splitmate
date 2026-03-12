@@ -11,11 +11,13 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 from pathlib import Path
+from importlib import import_module
 import os
 import sys
+from typing import Optional
 
 try:
-    from dotenv import load_dotenv
+    load_dotenv = import_module("dotenv").load_dotenv
 except ModuleNotFoundError:  # pragma: no cover - optional in minimal test env
     def load_dotenv(*_args, **_kwargs):
         return False
@@ -25,15 +27,34 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 env_path = BASE_DIR.parent / ".env"
 load_dotenv(env_path)
+
+
+def env(key: str, default=None, legacy_key: Optional[str] = None):
+    if key in os.environ:
+        return os.getenv(key, default)
+    if legacy_key and legacy_key in os.environ:
+        return os.getenv(legacy_key, default)
+    return default
+
+
+def env_list(key: str, default: str = "", legacy_key: Optional[str] = None):
+    value = env(key, default, legacy_key=legacy_key)
+    return [item.strip() for item in str(value).split(",") if item.strip()]
+
+
+def env_bool(key: str, default: bool = False, legacy_key: Optional[str] = None):
+    value = str(env(key, default, legacy_key=legacy_key)).strip().lower()
+    return value in {"1", "true", "yes", "on"}
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-secret-key")
+SECRET_KEY = env("SECRET_KEY", "unsafe-secret-key", legacy_key="DJANGO_SECRET_KEY")
 
-DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
+DEBUG = env_bool("DEBUG", False, legacy_key="DJANGO_DEBUG")
 
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "*", legacy_key="DJANGO_ALLOWED_HOSTS")
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", "")
 
 
 # Application definition
@@ -143,7 +164,10 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = Path(env("STATIC_ROOT", BASE_DIR / "staticfiles"))
+MEDIA_URL = "/media/"
+MEDIA_ROOT = Path(env("MEDIA_ROOT", BASE_DIR / "media"))
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

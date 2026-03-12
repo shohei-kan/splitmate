@@ -109,6 +109,94 @@ npm run lint
 npm run preview
 ```
 
+## Production Deploy
+
+Wyse 5070 / Ubuntu Server 24.04 LTS での Docker Compose 本番構成は `docker-compose.prod.yml` を使います。開発用 `docker-compose.yml` は変更せず、そのまま残しています。
+
+### 想定構成
+
+- `splitmate-frontend`: Vite build 済み静的ファイルを nginx で配信
+- `splitmate-backend`: Django + gunicorn
+- `splitmate-db`: PostgreSQL 16
+- reverse proxy: 既存 Caddy コンテナが `:8080` で `/api/*` を backend、それ以外を frontend に転送
+- external network: `proxy-net`
+- internal data:
+  - `/srv/storage/splitmate/postgres`
+  - `/srv/storage/splitmate/backend/media`
+  - `/srv/storage/splitmate/backend/static`
+- env files:
+  - `/srv/splitmate/compose/.env.prod`
+  - `/srv/splitmate/compose/.env.db`
+
+### 1. 本番 env を配置
+
+```bash
+cp .env.prod.example /srv/splitmate/compose/.env.prod
+cp .env.db.example /srv/splitmate/compose/.env.db
+```
+
+`.env.prod` では最低限以下を本番値に変更してください。
+
+- `SECRET_KEY`
+- `DEBUG=False`
+- `ALLOWED_HOSTS`
+- `CSRF_TRUSTED_ORIGINS`
+- 必要なら `GUNICORN_WORKERS`, `GUNICORN_TIMEOUT`
+
+`.env.db` では PostgreSQL の認証情報を設定します。
+
+`docker-compose.prod.yml` は repo 内の `.env.prod.example` / `.env.db.example` を fallback として読み、Wyse 本番では `/srv/splitmate/compose/.env.prod` と `/srv/splitmate/compose/.env.db` が存在すればそちらを優先します。
+
+### 2. 永続化ディレクトリと network を作成
+
+```bash
+sudo mkdir -p /srv/storage/splitmate/postgres
+sudo mkdir -p /srv/storage/splitmate/backend/media
+sudo mkdir -p /srv/storage/splitmate/backend/static
+docker network create proxy-net
+```
+
+### 3. Build / 起動
+
+```bash
+docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml up -d
+```
+
+backend コンテナ起動時に以下を自動実行します。
+
+- `python manage.py migrate --noinput`
+- `python manage.py collectstatic --noinput`
+- `gunicorn config.wsgi:application --bind 0.0.0.0:8000`
+
+### 4. 動作確認
+
+```bash
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs -f splitmate-backend
+docker compose -f docker-compose.prod.yml logs -f splitmate-frontend
+```
+
+Caddy 側では既存コンテナに以下のような `:8080` ブロックを追加し、LAN 内では `http://192.168.11.6:8080` で確認する想定です。
+
+```caddy
+:8080 {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy splitmate-backend:8000
+	}
+
+	handle {
+		reverse_proxy splitmate-frontend:80
+	}
+}
+```
+
+frontend の API 呼び出しは `/api/...` の相対パス前提のままです。React Router の直アクセスは nginx の SPA fallback で処理します。
+
+`/static` と `/media` は現時点では Caddy 配信を必須にしていません。必要になった時点で Caddy 側の route 追加を検討してください。
+
 ## API エンドポイント
 
 主なエンドポイント:

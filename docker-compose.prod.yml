@@ -1,0 +1,57 @@
+services:
+  splitmate-db:
+    image: postgres:16
+    restart: unless-stopped
+    env_file:
+      - path: ./.env.db.example
+        required: false
+      - path: /srv/splitmate/compose/.env.db
+        required: false
+    volumes:
+      - /srv/storage/splitmate/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - splitmate_internal
+
+  splitmate-backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - path: ./.env.prod.example
+        required: false
+      - path: ./.env.db.example
+        required: false
+      - path: /srv/splitmate/compose/.env.prod
+        required: false
+      - path: /srv/splitmate/compose/.env.db
+        required: false
+    depends_on:
+      splitmate-db:
+        condition: service_healthy
+    volumes:
+      - /srv/storage/splitmate/backend/media:/app/media
+      - /srv/storage/splitmate/backend/static:/app/staticfiles
+    networks:
+      - splitmate_internal
+      - proxy-net
+
+  splitmate-frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - splitmate-backend
+    networks:
+      - proxy-net
+
+networks:
+  splitmate_internal:
+  proxy-net:
+    external: true
