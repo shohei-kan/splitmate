@@ -94,8 +94,15 @@ DATABASES = {
     }
 }
 
-# ローカル単体テストは docker/db 依存を避けて SQLite を使う
-if "test" in sys.argv:
+# テスト時は docker/db 依存を避けて SQLite を使う
+IS_TEST = (
+    os.getenv("DJANGO_USE_SQLITE_FOR_TESTS") == "1"
+    or "test" in sys.argv
+    or "pytest" in sys.modules
+    or any("pytest" in arg for arg in sys.argv)
+)
+
+if IS_TEST:
     DATABASES["default"] = {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "test.sqlite3",

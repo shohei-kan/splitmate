@@ -34,6 +34,7 @@ jobs:
       - name: Pytest
         env:
           DJANGO_SETTINGS_MODULE: config.settings
+          DJANGO_USE_SQLITE_FOR_TESTS: "1"
         run: |
           pytest
 
