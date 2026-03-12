@@ -152,6 +152,22 @@ npm run preview
 - `amount` は 1 以上
 - `store` は空文字・空白のみ不可
 
+`burden_type` の許可値:
+
+- `shared`: 共有支出
+- `wife_only`: 妻の個人利用
+- `me_only`: 私の個人利用
+
+`category` の許可値:
+
+- `uncategorized`: 未分類
+- `food`: 食費
+- `daily`: 日用品
+- `outside_food`: 外食
+- `utility`: 光熱費
+- `travel`: 旅行
+- `other`: その他
+
 リクエスト例:
 
 ```json
