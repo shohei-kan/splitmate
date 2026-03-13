@@ -1,64 +1,62 @@
 # Codex作業サマリー
 
 ## 1. 今回の目的
-- グラフ配色を、淡いトーンは保ちつつ今より少しポップにする
-- 月次と年次でカテゴリ色の見た目を揃える
+- Summary 月次でカテゴリ選択時のスクロール位置を自然にする
+- 明細件数が少ないときは詳細全体が見やすく、件数が多いときは詳細上部から読めるようにする
 
 ## 2. 確認した状況
-- `frontend/src/components/summary/categoryColors.ts` には現在の共通カテゴリ色が定義されていた
-- `frontend/src/components/home/MonthlyCategoryBarChart.tsx` はその共通定義を使わず、別の古い色をローカルで持っていた
-- Home の月次グラフと Summary の年次グラフで、同じカテゴリでも色味が揃っていなかった
+- `frontend/src/components/summary/MonthlySummaryPanel.tsx` は、カテゴリ選択時に `detailSectionRef.current.scrollIntoView({ block: "start" })` で常に上端合わせのスクロールをしていた
+- そのため、明細件数が少ない場合でも詳細カードが中途半端な位置に止まりやすかった
+- 既存の `カテゴリ別詳細へ` ボタンも同じ上端合わせ前提だった
 - 関連ファイル:
-  - `frontend/src/components/summary/categoryColors.ts`
-  - `frontend/src/components/home/MonthlyCategoryBarChart.tsx`
+  - `frontend/src/components/summary/MonthlySummaryPanel.tsx`
 
 ## 3. 原因
 ### 確定
-- 配色定義が `categoryColors.ts` と `MonthlyCategoryBarChart.tsx` に分かれており、月次側だけ古い色を使っていた
+- スクロール位置が詳細セクションの実高さを見ずに固定で `block: "start"` になっていた
 
 ### 仮説
-- 今後さらにグラフが増えるなら、色の使い方をコンポーネントごとではなく共通ユーティリティで寄せたほうが管理しやすい
+- 将来的に sticky header が増える場合は、現在の `24px` マージンを調整したほうが見切れにくくなる可能性がある
 
 ## 4. 実施した変更
 - 変更したファイル一覧:
-  - `frontend/src/components/summary/categoryColors.ts`
-  - `frontend/src/components/home/MonthlyCategoryBarChart.tsx`
+  - `frontend/src/components/summary/MonthlySummaryPanel.tsx`
   - `docs/codex-handoff.md`
 - 各ファイルで何を変えたか:
-  - `frontend/src/components/summary/categoryColors.ts`
-    - カテゴリ色を、淡く保ちつつ少しポップなパステル寄りの配色へ更新した
-    - track 色もそれに合わせて明るい淡色へ更新した
-  - `frontend/src/components/home/MonthlyCategoryBarChart.tsx`
-    - ローカルの色定義をやめて `categoryColors.ts` の共通配色を使うようにした
-    - tooltip の店名折り返しクラスを `break-words` に修正した
+  - `frontend/src/components/summary/MonthlySummaryPanel.tsx`
+    - 詳細セクションの高さと viewport 高さを比較して、スクロール位置を切り替える `scrollToDetailSection` を追加
+    - 詳細セクションが画面内に収まる場合は、カード下端が viewport 下端に寄る位置までスクロールするようにした
+    - 詳細セクションが長い場合は、従来どおり上端を見せる位置までスクロールするようにした
+    - カテゴリ選択時は明細取得完了後に 1 回だけこのスクロールを走らせるよう、`pendingScrollRef` を追加した
+    - `カテゴリ別詳細へ` ボタンも同じスクロールロジックを使うようにした
 - 破壊的変更:
   - なし
 
 ## 5. テスト・確認結果
 - 実行したコマンド:
-  - `sed -n '1,220p' frontend/src/components/summary/categoryColors.ts`
-  - `sed -n '1,220p' frontend/src/components/home/MonthlyCategoryBarChart.tsx`
+  - `sed -n '1,340p' frontend/src/components/summary/MonthlySummaryPanel.tsx`
+  - `sed -n '1,200p' frontend/src/components/ui/Card.tsx`
   - `npm run build`
 - 成功したこと:
   - `npm run build` 成功
-  - 月次と年次で同じカテゴリ配色を共有する状態で build が通った
+  - Summary 月次のスクロール条件分岐を入れた状態で frontend build が通った
 - 失敗したこと:
   - なし
 - 未実施の確認:
-  - ブラウザ上での実色味確認
-  - モニタ差による見え方確認
+  - ブラウザで件数が少ないカテゴリと多いカテゴリの両方を選んだときの実スクロール確認
+  - モバイル幅での見え方確認
 
 ## 6. 未解決事項
-- 今回は色味だけの調整で、hover / selected 状態の装飾差分までは見直していない
-- さらにポップさを上げる場合は、文字色や境界線色も合わせて調整したほうが全体の統一感は上がる
+- スクロール基準のマージンは現在 `24px` 固定
+- 「件数が少ない」の判定は件数ではなく実際の描画高さベースにしている
 
 ## 7. 次にやるなら
-1. 実画面で Home 月次と Summary 年次を見比べて、彩度と明度のバランスを確認する
-2. 必要なら selected 状態のリングや hover 背景色もカテゴリ色に寄せて微調整する
-3. グラフ以外のカテゴリバッジ色も同じ配色へ寄せるか検討する
+1. 実画面で少件数・多件数カテゴリの両方を確認して、スクロール位置の体感を調整する
+2. 必要なら `24px` のマージン値や `scroll-mt` を微調整する
+3. もし URL 共有性が必要なら、選択カテゴリもクエリに持たせるか検討する
 
 ## 8. ChatGPTに相談したいこと
-- 家計アプリのトーンを崩さず、もう一段だけポップにするなら、次は色そのものよりも hover / selected の演出を触るべきか整理したい
+- Summary 月次のカテゴリ別詳細スクロールは高さベース判定にしたが、UX 的に件数ベースやテーブル行数ベースのほうがわかりやすいか判断材料がほしい
 
 ## 9. ChatGPTに次に頼む依頼文
-- SplitMate のカテゴリ配色は現在、淡いパステル寄りに調整済みです。この状態から家計アプリらしい落ち着きを保ったまま、もう少しだけ楽しさを足すなら、色をさらに変えるより hover / selected / tooltip 背景などの周辺演出をどう整えるのが効果的か整理してください。
+- SplitMate の Summary 月次では、カテゴリ選択時の詳細スクロール位置を「詳細セクションの実高さが viewport に収まるかどうか」で切り替える実装にしています。UX の観点で、この高さベース判定は妥当か、それとも件数や行数ベースのほうがわかりやすいか整理してください。

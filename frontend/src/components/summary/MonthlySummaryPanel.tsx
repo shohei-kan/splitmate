@@ -67,6 +67,7 @@ export function MonthlySummaryPanel({ initialMonth }: { initialMonth?: string })
   const [targetYM, setTargetYM] = useState(initial);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const detailSectionRef = useRef<HTMLDivElement | null>(null);
+  const pendingScrollRef = useRef(false);
 
   const monthKey = `${targetYM.year}-${pad2(targetYM.month)}`;
 
@@ -76,14 +77,6 @@ export function MonthlySummaryPanel({ initialMonth }: { initialMonth?: string })
       setTargetYM(parsed);
     }
   }, [initialMonth]);
-
-  useEffect(() => {
-    if (!selectedCategory) return;
-    detailSectionRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  }, [selectedCategory]);
 
   const summaryQuery = useQuery({
     queryKey: qk.summaryMonthlyCategory(monthKey),
@@ -104,7 +97,39 @@ export function MonthlySummaryPanel({ initialMonth }: { initialMonth?: string })
     enabled: !!selectedCategory,
   });
 
+  const scrollToDetailSection = () => {
+    const element = detailSectionRef.current;
+    if (!element) return;
+
+    const rect = element.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const margin = 24;
+    const fitsViewport = rect.height <= viewportHeight - margin * 2;
+    const top = fitsViewport
+      ? window.scrollY + rect.bottom - viewportHeight + margin
+      : window.scrollY + rect.top - margin;
+
+    window.scrollTo({
+      top: Math.max(0, top),
+      behavior: "smooth",
+    });
+  };
+
+  useEffect(() => {
+    if (!selectedCategory || selectedCategoryQuery.isLoading || !pendingScrollRef.current) {
+      return;
+    }
+
+    pendingScrollRef.current = false;
+    const frameId = window.requestAnimationFrame(() => {
+      scrollToDetailSection();
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [selectedCategory, selectedCategoryQuery.isLoading, selectedCategoryQuery.data]);
+
   const selectCategory = (category: Category) => {
+    pendingScrollRef.current = true;
     setSelectedCategory(category);
   };
 
@@ -173,12 +198,7 @@ export function MonthlySummaryPanel({ initialMonth }: { initialMonth?: string })
             <button
               type="button"
               className="rounded-full border border-[#D1DCE8] bg-white px-4 py-2 text-sm font-semibold text-[#143A61] hover:bg-[#F7FAFD]"
-              onClick={() =>
-                detailSectionRef.current?.scrollIntoView({
-                  behavior: "smooth",
-                  block: "start",
-                })
-              }
+              onClick={scrollToDetailSection}
             >
               カテゴリ別詳細へ
             </button>
