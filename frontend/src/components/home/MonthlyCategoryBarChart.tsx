@@ -1,5 +1,6 @@
 import type { MonthlyCategorySummaryItem } from "../../api/types";
 import { yen } from "../../lib/format";
+import { categoryColor, categoryTrackColor } from "../summary/categoryColors";
 
 type MonthlyCategoryBarChartProps = {
   items: MonthlyCategorySummaryItem[];
@@ -8,25 +9,10 @@ type MonthlyCategoryBarChartProps = {
 };
 
 function categoryBarColors(category: MonthlyCategorySummaryItem["category"]) {
-  if (category === "food") {
-    return { fill: "#5FA37C", track: "#E7F6EC" };
-  }
-  if (category === "daily") {
-    return { fill: "#6C93C7", track: "#F1F6FF" };
-  }
-  if (category === "outside_food") {
-    return { fill: "#D19961", track: "#FFF4E7" };
-  }
-  if (category === "utility") {
-    return { fill: "#8B70BE", track: "#F3EDFF" };
-  }
-  if (category === "travel") {
-    return { fill: "#5E9DAC", track: "#E8FBFF" };
-  }
-  if (category === "other") {
-    return { fill: "#A38868", track: "#F7F0E8" };
-  }
-  return { fill: "#8A97A4", track: "#EEF1F5" };
+  return {
+    fill: categoryColor(category),
+    track: categoryTrackColor(category),
+  };
 }
 
 export function MonthlyCategoryBarChart({

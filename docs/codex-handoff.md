@@ -1,72 +1,64 @@
 # Codex作業サマリー
 
 ## 1. 今回の目的
-- Home 月次グラフの hover tooltip で長い店名が重ならないようにする
-- Summary 月次でカテゴリ選択時に、下部のカテゴリ別詳細へ自然に移動できるようにする
+- グラフ配色を、淡いトーンは保ちつつ今より少しポップにする
+- 月次と年次でカテゴリ色の見た目を揃える
 
 ## 2. 確認した状況
-- `frontend/src/components/home/MonthlyCategoryBarChart.tsx` の hover tooltip は、上位明細を 1 行グリッドで表示しており、長い店名が金額列に食い込みやすかった
-- `frontend/src/components/summary/MonthlySummaryPanel.tsx` にはカテゴリ別明細セクション自体はあり、`カテゴリ別詳細へ` ボタンもあった
-- 同ファイルには `detailSectionRef` と `selectedCategory` 変更時の `scrollIntoView` もすでに入っていたが、カテゴリ選択処理が散っていた
+- `frontend/src/components/summary/categoryColors.ts` には現在の共通カテゴリ色が定義されていた
+- `frontend/src/components/home/MonthlyCategoryBarChart.tsx` はその共通定義を使わず、別の古い色をローカルで持っていた
+- Home の月次グラフと Summary の年次グラフで、同じカテゴリでも色味が揃っていなかった
 - 関連ファイル:
+  - `frontend/src/components/summary/categoryColors.ts`
   - `frontend/src/components/home/MonthlyCategoryBarChart.tsx`
-  - `frontend/src/components/summary/MonthlySummaryPanel.tsx`
 
 ## 3. 原因
 ### 確定
-- tooltip の明細行が `日付 / 店名 / 金額` の横並び前提で、長い店名を十分に逃がせていなかった
-- Summary 月次のカテゴリ選択導線は存在したが、詳細セクションへの移動が UI 上で伝わりにくかった
+- 配色定義が `categoryColors.ts` と `MonthlyCategoryBarChart.tsx` に分かれており、月次側だけ古い色を使っていた
 
 ### 仮説
-- tooltip の表示位置は画面端条件によっては今後まだ微調整が必要かもしれない
+- 今後さらにグラフが増えるなら、色の使い方をコンポーネントごとではなく共通ユーティリティで寄せたほうが管理しやすい
 
 ## 4. 実施した変更
 - 変更したファイル一覧:
+  - `frontend/src/components/summary/categoryColors.ts`
   - `frontend/src/components/home/MonthlyCategoryBarChart.tsx`
-  - `frontend/src/components/summary/MonthlySummaryPanel.tsx`
   - `docs/codex-handoff.md`
 - 各ファイルで何を変えたか:
+  - `frontend/src/components/summary/categoryColors.ts`
+    - カテゴリ色を、淡く保ちつつ少しポップなパステル寄りの配色へ更新した
+    - track 色もそれに合わせて明るい淡色へ更新した
   - `frontend/src/components/home/MonthlyCategoryBarChart.tsx`
-    - tooltip 幅を少し広げ、viewport 幅を超えにくい制約を追加
-    - 上位明細 1 件ごとを 2 段表示に変更し、1 段目に `日付 / 金額`、2 段目に店名を出すようにした
-    - 店名は `break-words` で折り返すようにして、長い文字列でも金額と重ならないようにした
-  - `frontend/src/components/summary/MonthlySummaryPanel.tsx`
-    - カテゴリ選択処理を `selectCategory` にまとめた
-    - グラフと一覧の両方から同じ選択処理を使うようにした
-    - 詳細セクションに `scroll-mt-24` を付けて、スクロール先の見切れを減らした
-    - 既存のカテゴリ選択時スクロールをそのまま活かしつつ、詳細セクションへの移動を自然にした
+    - ローカルの色定義をやめて `categoryColors.ts` の共通配色を使うようにした
+    - tooltip の店名折り返しクラスを `break-words` に修正した
 - 破壊的変更:
   - なし
 
 ## 5. テスト・確認結果
 - 実行したコマンド:
-  - `sed -n '1,260p' frontend/src/components/home/MonthlyCategoryBarChart.tsx`
-  - `sed -n '1,320p' frontend/src/components/summary/MonthlySummaryPanel.tsx`
-  - `sed -n '320,520p' frontend/src/components/summary/MonthlySummaryPanel.tsx`
-  - `sed -n '1,220p' docs/codex-handoff-prompt.md`
+  - `sed -n '1,220p' frontend/src/components/summary/categoryColors.ts`
+  - `sed -n '1,220p' frontend/src/components/home/MonthlyCategoryBarChart.tsx`
   - `npm run build`
-  - `git status --short`
 - 成功したこと:
   - `npm run build` 成功
-  - tooltip の長い店名を 2 段表示で崩れにくくした状態で build が通った
-  - Summary 月次のカテゴリ選択導線を整理した状態で build が通った
+  - 月次と年次で同じカテゴリ配色を共有する状態で build が通った
 - 失敗したこと:
   - なし
 - 未実施の確認:
-  - ブラウザで長い店名を含む tooltip の実表示確認
-  - モバイル幅での tooltip 位置確認
+  - ブラウザ上での実色味確認
+  - モニタ差による見え方確認
 
 ## 6. 未解決事項
-- Home の tooltip は左寄せ固定なので、画面端での表示位置最適化まではまだしていない
-- Summary 月次の詳細移動は同一ページ内スクロールで対応しており、別ページの詳細画面は未追加
+- 今回は色味だけの調整で、hover / selected 状態の装飾差分までは見直していない
+- さらにポップさを上げる場合は、文字色や境界線色も合わせて調整したほうが全体の統一感は上がる
 
 ## 7. 次にやるなら
-1. ブラウザで長い店名の hover tooltip を確認して、必要なら幅と表示位置を微調整する
-2. Summary 月次のカテゴリ別詳細を URL クエリと連動させるか検討する
-3. 将来的に必要ならカテゴリ別詳細の専用ページ化を検討する
+1. 実画面で Home 月次と Summary 年次を見比べて、彩度と明度のバランスを確認する
+2. 必要なら selected 状態のリングや hover 背景色もカテゴリ色に寄せて微調整する
+3. グラフ以外のカテゴリバッジ色も同じ配色へ寄せるか検討する
 
 ## 8. ChatGPTに相談したいこと
-- Home の hover tooltip を画面端でも崩れにくくするには、CSS のみで十分か、軽い位置計算を入れるべきか判断材料がほしい
+- 家計アプリのトーンを崩さず、もう一段だけポップにするなら、次は色そのものよりも hover / selected の演出を触るべきか整理したい
 
 ## 9. ChatGPTに次に頼む依頼文
-- SplitMate の Home 月次グラフ tooltip は現在 CSS ベースで表示しており、長い店名の折り返し対応までは入っています。次の改善として、画面端ではみ出しにくくするには CSS だけでどこまで対応すべきか、軽い位置計算を入れるならどの程度の実装が妥当かを整理してください。
+- SplitMate のカテゴリ配色は現在、淡いパステル寄りに調整済みです。この状態から家計アプリらしい落ち着きを保ったまま、もう少しだけ楽しさを足すなら、色をさらに変えるより hover / selected / tooltip 背景などの周辺演出をどう整えるのが効果的か整理してください。
