@@ -1,99 +1,62 @@
 # Codex作業サマリー
 
 ## 1. 今回の目的
-- SplitMate の Phase 3-3.1 として、Summary 年次タブの積み上げ棒グラフとカテゴリ別棒グラフの読み取りやすさを小さく改善する
-- 年次グラフのカテゴリ配色を、淡さは保ちつつ今より見分けやすい色相差に調整する
-- 年次グラフのカテゴリ色を、より色相差の大きい方向へ再調整する
-- 年次グラフのカテゴリ色を、もう少し明るくパステル寄りに調整する
+- SplitMate の README に、Phase 3-1〜3-3.1 の実装内容を自然な形で追記し、現在の機能と今後の見通しを分かりやすくする
 
 ## 2. 確認した状況
-- 年次タブには `YearlyStackedBarChart` と `YearlyCategoryBarChart` が実装済みだった
-- 両グラフとも数値は見えていたが、ホバー時の詳細確認は `title` 頼みで、凡例も明示されていなかった
-- カテゴリ色定義が年次グラフ2コンポーネント内で重複していた
-- backend 側の年次 API は今回の見た目改善には十分だったため、変更不要だった
+- 既存 README はセットアップ、開発コマンド、本番デプロイ、API 契約の情報が中心だった
+- Home / Summary の画面機能や、Phase 3 系で追加した UI 改善は README に十分反映されていなかった
+- Summary ページや年次グラフの存在は README 上でまだ明示されていなかった
 - 関連ファイル:
-  - `frontend/src/components/summary/YearlyStackedBarChart.tsx`
-  - `frontend/src/components/summary/YearlyCategoryBarChart.tsx`
-  - `frontend/src/components/summary/YearlyOverviewChartSection.tsx`
-  - `frontend/src/components/summary/YearlyCategoryDetailSection.tsx`
-  - `frontend/src/components/summary/YearlySummaryPanel.tsx`
+  - `README.md`
 
 ## 3. 原因
 ### 確定
-- 年次積み上げ棒グラフにカテゴリ名と色対応が分かる凡例が不足していた
-- 各月の詳細数値を、画面上でまとまった形で確認しづらかった
-- カテゴリ別棒グラフも月ごとの値確認がしづらかった
+- README の機能紹介が Phase 3 実装前ベースのままで、最近の UI / 画面追加とズレていた
 
 ### 仮説
-- 今後月次グラフ側にも同じ tooltip パターンを入れるなら、tooltip 表示の部品化余地がある
+- 将来さらに README が長くなってきたら、画面紹介や運用メモを `docs/` に分離する余地がある
 
 ## 4. 実施した変更
 - 変更したファイル一覧:
-  - `frontend/src/components/summary/categoryColors.ts`
-  - `frontend/src/components/summary/YearlyStackedBarChart.tsx`
-  - `frontend/src/components/summary/YearlyCategoryBarChart.tsx`
-  - `frontend/src/components/summary/YearlyOverviewChartSection.tsx`
-  - `frontend/src/components/summary/YearlyCategoryDetailSection.tsx`
-  - `frontend/src/components/summary/YearlySummaryPanel.tsx`
+  - `README.md`
   - `docs/codex-handoff.md`
 - 各ファイルで何を変えたか:
-  - `frontend/src/components/summary/categoryColors.ts`
-    - 年次グラフ用のカテゴリ色・背景色を最小共通化
-    - 指定された新しい色案に差し替え、カテゴリ間の色相差を広げた
-    - さらに色相差を広げた別案に差し替え、緑・青・赤・紫・黄・茶の方向で判別しやすくした
-    - さらに明度を上げて、全体をややパステル寄りのトーンに再調整した
-  - `frontend/src/components/summary/YearlyStackedBarChart.tsx`
-    - 凡例を追加
-    - 各月の棒にカスタム tooltip を追加
-    - tooltip 内に対象月、総支出、カテゴリ別金額を表示
-    - 凡例クリックで選択カテゴリ変更と連動できるようにした
-  - `frontend/src/components/summary/YearlyCategoryBarChart.tsx`
-    - 月別棒にカスタム tooltip を追加
-    - tooltip 内に月、カテゴリ名、金額を表示
-    - 背景色をカテゴリ色に合わせた薄色に調整
-  - `frontend/src/components/summary/YearlyOverviewChartSection.tsx`
-    - 選択カテゴリ state と連動できるよう props を追加
-  - `frontend/src/components/summary/YearlyCategoryDetailSection.tsx`
-    - カテゴリ別棒グラフへカテゴリラベルを渡すようにした
-  - `frontend/src/components/summary/YearlySummaryPanel.tsx`
-    - 凡例クリックでカテゴリ選択が反映されるように props を中継
+  - `README.md`
+    - `Current Features` を追加
+    - `Pages` を追加
+    - `Summary Features` を追加
+    - `Recent Updates` を追加
+    - API エンドポイント一覧に `stores/suggestions`, `monthly-by-category`, `yearly` を追記
+    - `Roadmap` を追加
+    - Home の月次アコーディオン、店名候補 + 自由入力、Summary ページ、Summary 月次 / 年次、年次グラフの凡例 / tooltip / 配色改善を反映
+    - Roadmap に CSV取込時のカテゴリ自動提案 / 自動分類、GitHub Actions の手動実行型 CD、グラフ UI 微調整、店名候補 UI の他画面展開を追記
+  - `docs/codex-handoff.md`
+    - 今回の README 更新内容に差し替え
 - 破壊的変更:
   - なし
-  - backend API は変更していない
+  - ドキュメント更新のみ
 
 ## 5. テスト・確認結果
 - 実行したコマンド:
-  - `sed -n '1,260p' frontend/src/components/summary/YearlyStackedBarChart.tsx`
-  - `sed -n '1,260p' frontend/src/components/summary/YearlyCategoryBarChart.tsx`
-  - `sed -n '1,260p' frontend/src/components/summary/YearlyOverviewChartSection.tsx`
-  - `sed -n '1,320p' frontend/src/components/summary/YearlyCategoryDetailSection.tsx`
-  - `sed -n '1,220p' frontend/src/components/home/MonthlyCategoryBarChart.tsx`
-  - `npm run build`
+  - `sed -n '1,320p' README.md`
 - 成功したこと:
-  - `npm run build` 成功
-  - 年次積み上げ棒グラフに凡例と tooltip を追加した状態で build が通った
-  - カテゴリ別棒グラフに tooltip を追加した状態で build が通った
-  - 新しい配色に差し替えた後も年次グラフ関連の build は通った
-  - 再配色後も build は通り、年次グラフ側に自然に反映される状態を維持できた
-  - パステル寄りへの再調整後も build は通った
+  - README に現在の画面構成と Summary 機能、最近の更新内容、Roadmap を追記できた
 - 失敗したこと:
   - なし
 - 未実施の確認:
-  - ブラウザ上での hover / focus tooltip の実操作確認
-  - モバイル幅での tooltip の視認性確認
+  - README のレンダリング確認
 
 ## 6. 未解決事項
-- tooltip は CSS ベースの簡易表示で、画面端の自動反転まではしていない
-- 月次グラフ側とは tooltip 実装をまだ共通化していない
-- モバイルでは hover がないため、主に focus / タップ時の見え方確認が必要
+- README は情報量が増えてきているため、今後さらに詳細な仕様や運用メモが増える場合は分割を検討してよい
 
 ## 7. 次にやるなら
-1. ブラウザで年次タブを開き、凡例クリックと tooltip 表示を実操作確認する
-2. モバイル幅で tooltip の位置と読めるかを確認する
-3. 必要なら tooltip の位置調整や簡易凡例のレスポンシブ調整を追加する
+1. GitHub やエディタ上で README のレンダリングを確認する
+2. 必要なら Summary 画面のスクリーンショットや GIF を後から追加する
+3. ロードマップの優先順位を定期的に見直す
 
 ## 8. ChatGPTに相談したいこと
-- tooltip を今の軽量実装のまま維持するか、将来共通コンポーネント化するか判断材料がほしい
+- README の情報量がさらに増えた時に、どの単位で `docs/` へ分割すると読みやすさを維持しやすいか整理したい
 
 ## 9. ChatGPTに次に頼む依頼文
-- SplitMate の Phase 3-3.1 実装後の状態を前提に、年次グラフの tooltip を今の CSS ベースの軽量実装のまま維持すべきか、共通 Tooltip コンポーネントに寄せるべきか、保守性と実装コストの観点で整理してください。
+- SplitMate の README が Phase 3 系の追記で長くなってきた前提で、README に残すべき情報と `docs/` に分けるべき情報の切り分け方を、OSS 風の読みやすさを保つ観点で整理してください。
