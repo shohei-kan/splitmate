@@ -1,61 +1,55 @@
 # Codex作業サマリー
 
 ## 1. 今回の目的
-- Home 月次グラフの hover tooltip を、見た目を大きく変えずに画面端で見切れにくくする
+- 今回の UX 改善内容を README に反映する
 
 ## 2. 確認した状況
-- `frontend/src/components/home/MonthlyCategoryBarChart.tsx` の tooltip は absolute 配置で `left-0` 固定、上方向固定だった
-- そのため、hover 位置によっては右端や上端ではみ出しやすかった
-- tooltip 内容自体は問題なく、長い店名の折り返しも維持すればよかった
+- `README.md` には Phase 3-1〜3-3.1 の機能概要は入っていたが、直近の Home tooltip 位置改善と Summary 月次の詳細スクロール改善はまだ記載されていなかった
+- 既存 README には `Current Features`, `Pages`, `Summary Features`, `Recent Updates` の章があり、追記中心で自然に更新できる構成だった
 - 関連ファイル:
-  - `frontend/src/components/home/MonthlyCategoryBarChart.tsx`
+  - `README.md`
 
 ## 3. 原因
 ### 確定
-- tooltip の表示位置が CSS 固定で、hover 対象の viewport 上の位置を見ていなかった
+- README が直近の UI 改善に追従していなかった
 
 ### 仮説
-- スクロールコンテナがさらに複雑になると、将来的には再計算タイミングの微調整が必要になる可能性がある
+- 今後も小さな UX 改善が続くなら、`Recent Updates` に phase 単位とは別の `UX polish` のような整理を残すほうが追記しやすい
 
 ## 4. 実施した変更
 - 変更したファイル一覧:
-  - `frontend/src/components/home/MonthlyCategoryBarChart.tsx`
+  - `README.md`
   - `docs/codex-handoff.md`
 - 各ファイルで何を変えたか:
-  - `frontend/src/components/home/MonthlyCategoryBarChart.tsx`
-    - グラフ 1 行分を `MonthlyCategoryBarChartRow` に分け、tooltip の表示状態と配置計算をその中で持つようにした
-    - `getBoundingClientRect()` と viewport 幅を使って、tooltip の横位置を `left / center / right` で切り替えるようにした
-    - tooltip の実高さを見て、上に出せない場合は下に出すようにした
-    - `resize` と `scroll` 時にも配置を再計算するようにした
-    - 既存の見た目トーンは維持し、tooltip の中身やスタイルはほぼ据え置いた
+  - `README.md`
+    - `Current Features` に Home のカテゴリ hover tooltip と Summary 月次のカテゴリ詳細導線を追記
+    - `Pages` の Home 説明に、上位明細プレビューを追記
+    - `Summary Features` の月次項目に、カテゴリ選択時の当月明細表示と詳細スクロール誘導を追記
+    - `Recent Updates` に `UX polish` を追加し、Home tooltip の画面端対応と Summary 月次のスクロール改善を追記
 - 破壊的変更:
   - なし
 
 ## 5. テスト・確認結果
 - 実行したコマンド:
-  - `sed -n '1,260p' frontend/src/components/home/MonthlyCategoryBarChart.tsx`
-  - `npm run build`
-  - `npm run build`
+  - `sed -n '1,320p' README.md`
+  - `sed -n '1,260p' docs/codex-handoff.md`
 - 成功したこと:
-  - 2 回目の `npm run build` 成功
-  - tooltip の軽い位置計算実装を入れた状態で frontend build が通った
+  - README の既存構成を崩さず、追記中心で更新できた
 - 失敗したこと:
-  - 1 回目の `npm run build` は未使用変数 `viewportHeight` が残って失敗したが、削除後は成功
+  - なし
 - 未実施の確認:
-  - ブラウザで左端・右端・上端付近の hover 実操作確認
-  - モバイル幅での tooltip 見え方確認
+  - README の記述と実画面の目視照合
 
 ## 6. 未解決事項
-- 今回は軽い位置計算のみで、tooltip が hover 中にカーソルへ追従する実装は入れていない
-- 横位置は `left / center / right` の 3 段階切替なので、さらに細かい位置調整は未対応
+- README の `Recent Updates` は phase 記述と UX 改善記述が混在し始めているため、将来的に整理が必要になる可能性がある
 
 ## 7. 次にやるなら
-1. 実画面で左右端と上端の hover を確認して、必要なら余白値を微調整する
-2. 必要ならモバイル幅で tooltip 幅を少し縮める条件を追加する
-3. 年次グラフ tooltip にも同様の軽い端寄せロジックが必要か確認する
+1. 実画面を見ながら README の文言が過不足ないか確認する
+2. 次回以降の更新で `Recent Updates` の粒度を phase / polish / deploy などで整理する
+3. 必要ならスクリーンショット付きの説明追加を検討する
 
 ## 8. ChatGPTに相談したいこと
-- tooltip の端寄せは 3 段階切替にしたが、UX 的にこれで十分か、もう少しだけ中央寄せ補正を足すべきか判断材料がほしい
+- README の `Recent Updates` が増えてきたとき、phase ベースと UX 改善ベースのどちらで整理すると読みやすいか判断材料がほしい
 
 ## 9. ChatGPTに次に頼む依頼文
-- SplitMate の Home 月次グラフ tooltip は、現在 `left / center / right` と `top / bottom` の軽い切替で画面端対応しています。この方式のままで十分か、見た目を崩さずにもう少し自然な位置補正を足すならどの程度が妥当か整理してください。
+- SplitMate の README は現在、Phase ごとの更新と UX 改善の更新が混在し始めています。今後アップデートが増えても読みやすく保つには、`Recent Updates` を phase 単位で維持すべきか、機能カテゴリや UX / deploy などで整理すべきかを提案してください。
