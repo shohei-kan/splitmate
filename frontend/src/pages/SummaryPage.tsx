@@ -1,9 +1,9 @@
 import { useState } from "react";
 
 import { PageShell } from "../components/layout/PageShell";
-import { Card } from "../components/ui/Card";
 import { SummaryTabs } from "../components/summary/SummaryTabs";
 import { MonthlySummaryPanel } from "../components/summary/MonthlySummaryPanel";
+import { YearlySummaryPanel } from "../components/summary/YearlySummaryPanel";
 
 type SummaryTab = "monthly" | "yearly";
 
@@ -16,7 +16,7 @@ export function SummaryPage() {
         <div className="space-y-3">
           <div className="text-3xl font-bold text-[#143A61]">集計</div>
           <div className="text-sm text-[#6A7C8E]">
-            月ごとのカテゴリ別支出を、グラフと一覧で確認できます。
+            月次・年次の支出傾向を、グラフと一覧で確認できます。
           </div>
         </div>
 
@@ -25,12 +25,7 @@ export function SummaryPage() {
         {activeTab === "monthly" ? (
           <MonthlySummaryPanel />
         ) : (
-          <Card className="p-6">
-            <div className="text-lg font-bold text-[#143A61]">年次集計</div>
-            <div className="mt-2 text-sm text-[#6A7C8E]">
-              年次集計は次のフェーズで追加予定です。
-            </div>
-          </Card>
+          <YearlySummaryPanel />
         )}
       </div>
     </PageShell>

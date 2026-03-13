@@ -7,24 +7,24 @@ type MonthlyCategoryBarChartProps = {
 
 function categoryBarColors(category: MonthlyCategorySummaryItem["category"]) {
   if (category === "food") {
-    return { fill: "#24734B", track: "#E7F6EC" };
+    return { fill: "#5FA37C", track: "#E7F6EC" };
   }
   if (category === "daily") {
-    return { fill: "#2B5E9E", track: "#F1F6FF" };
+    return { fill: "#6C93C7", track: "#F1F6FF" };
   }
   if (category === "outside_food") {
-    return { fill: "#A8641F", track: "#FFF4E7" };
+    return { fill: "#D19961", track: "#FFF4E7" };
   }
   if (category === "utility") {
-    return { fill: "#6741A6", track: "#F3EDFF" };
+    return { fill: "#8B70BE", track: "#F3EDFF" };
   }
   if (category === "travel") {
-    return { fill: "#1B6C80", track: "#E8FBFF" };
+    return { fill: "#5E9DAC", track: "#E8FBFF" };
   }
   if (category === "other") {
-    return { fill: "#7A5C36", track: "#F7F0E8" };
+    return { fill: "#A38868", track: "#F7F0E8" };
   }
-  return { fill: "#5E6E7E", track: "#EEF1F5" };
+  return { fill: "#8A97A4", track: "#EEF1F5" };
 }
 
 export function MonthlyCategoryBarChart({ items }: MonthlyCategoryBarChartProps) {
@@ -32,12 +32,10 @@ export function MonthlyCategoryBarChart({ items }: MonthlyCategoryBarChartProps)
     return <div className="text-sm text-[#6A7C8E]">この月のカテゴリ集計はまだありません。</div>;
   }
 
-  const maxAmount = items[0]?.amount ?? 0;
-
   return (
     <div className="space-y-4">
       {items.map((item) => {
-        const width = maxAmount > 0 ? `${Math.max((item.amount / maxAmount) * 100, 8)}%` : "0%";
+        const width = `${Math.max(Math.round(item.ratio), item.ratio > 0 ? 1 : 0)}%`;
         const colors = categoryBarColors(item.category);
         return (
           <div key={item.category} className="space-y-1">

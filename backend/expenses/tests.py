@@ -239,3 +239,72 @@ class MonthlyCategorySummaryApiTests(TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.data["month"], "2026-04")
         self.assertEqual(res.data["total_amount"], 500)
+
+
+class YearlySummaryApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = "/api/summary/yearly/"
+
+    def test_returns_yearly_summary_with_zero_filled_months(self):
+        Expense.objects.create(
+            date=datetime.date(2026, 1, 10),
+            store="A",
+            amount=3000,
+            category=Expense.Category.FOOD,
+        )
+        Expense.objects.create(
+            date=datetime.date(2026, 1, 20),
+            store="B",
+            amount=2000,
+            category=Expense.Category.DAILY,
+        )
+        Expense.objects.create(
+            date=datetime.date(2026, 2, 5),
+            store="C",
+            amount=4000,
+            category=Expense.Category.FOOD,
+        )
+        Expense.objects.create(
+            date=datetime.date(2025, 12, 25),
+            store="Old",
+            amount=9999,
+            category=Expense.Category.OTHER,
+        )
+
+        res = self.client.get(self.url, {"year": 2026})
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["year"], 2026)
+        self.assertEqual(res.data["total_amount"], 9000)
+        self.assertEqual(res.data["average_monthly_amount"], 750)
+        self.assertEqual(res.data["total_count"], 3)
+        self.assertEqual(len(res.data["months"]), 12)
+        self.assertEqual(res.data["months"][0]["month"], "2026-01")
+        self.assertEqual(res.data["months"][1]["month"], "2026-02")
+        self.assertEqual(res.data["months"][2]["month"], "2026-03")
+        self.assertEqual(
+            res.data["months"][0],
+            {
+                "month": "2026-01",
+                "total_amount": 5000,
+                "categories": [
+                    {"category": "food", "label": "食費", "amount": 3000},
+                    {"category": "daily", "label": "日用品", "amount": 2000},
+                ],
+            },
+        )
+        self.assertEqual(
+            res.data["months"][1],
+            {
+                "month": "2026-02",
+                "total_amount": 4000,
+                "categories": [
+                    {"category": "food", "label": "食費", "amount": 4000},
+                ],
+            },
+        )
+        self.assertEqual(
+            res.data["months"][2],
+            {"month": "2026-03", "total_amount": 0, "categories": []},
+        )

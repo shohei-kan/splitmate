@@ -89,6 +89,26 @@ class MonthlyCategorySummarySerializer(serializers.Serializer):
     categories = MonthlyCategoryBreakdownItemSerializer(many=True)
 
 
+class YearlySummaryCategorySerializer(serializers.Serializer):
+    category = serializers.CharField()
+    label = serializers.CharField()
+    amount = serializers.IntegerField()
+
+
+class YearlySummaryMonthSerializer(serializers.Serializer):
+    month = serializers.CharField()
+    total_amount = serializers.IntegerField()
+    categories = YearlySummaryCategorySerializer(many=True)
+
+
+class YearlySummarySerializer(serializers.Serializer):
+    year = serializers.IntegerField()
+    total_amount = serializers.IntegerField()
+    average_monthly_amount = serializers.IntegerField()
+    total_count = serializers.IntegerField()
+    months = YearlySummaryMonthSerializer(many=True)
+
+
 class MonthStatusUpdateSerializer(serializers.Serializer):
     year = serializers.IntegerField()
     month = serializers.IntegerField()

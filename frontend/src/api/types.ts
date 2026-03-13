@@ -24,6 +24,26 @@ export interface MonthlyCategorySummary {
   categories: MonthlyCategorySummaryItem[];
 }
 
+export interface YearlySummaryCategory {
+  category: Category;
+  label: string;
+  amount: number;
+}
+
+export interface YearlySummaryMonth {
+  month: string;
+  total_amount: number;
+  categories: YearlySummaryCategory[];
+}
+
+export interface YearlySummary {
+  year: number;
+  total_amount: number;
+  average_monthly_amount: number;
+  total_count: number;
+  months: YearlySummaryMonth[];
+}
+
 export interface StoreSuggestion {
   name: string;
   count: number;

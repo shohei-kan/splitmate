@@ -1,4 +1,4 @@
-import type { MonthlyCategorySummary, MonthlySummary } from "./types";
+import type { MonthlyCategorySummary, MonthlySummary, YearlySummary } from "./types";
 import { apiFetch } from "./client";
 
 export function fetchMonthlySummary(year: number, month: number) {
@@ -10,4 +10,11 @@ export function fetchMonthlyCategorySummary(month?: string) {
   if (month) q.set("month", month);
   const suffix = q.toString() ? `?${q.toString()}` : "";
   return apiFetch<MonthlyCategorySummary>(`/api/summary/monthly-by-category/${suffix}`);
+}
+
+export function fetchYearlySummary(year?: number) {
+  const q = new URLSearchParams();
+  if (year) q.set("year", String(year));
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  return apiFetch<YearlySummary>(`/api/summary/yearly/${suffix}`);
 }

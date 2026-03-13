@@ -27,6 +27,7 @@ from expenses.views import (
     MonthStatusUpdateView,
     ExclusionRuleViewSet,
     MonthlyCategorySummaryView,
+    YearlySummaryView,
     AppSettingsView,
     StoreSuggestionsView,
 )
@@ -40,7 +41,8 @@ urlpatterns = [
     path("api/", include(router.urls)),
     path("api/summary/monthly/", MonthlySummaryView.as_view(), name="monthly-summary"),
     path("api/summary/monthly-list/", MonthlySummaryListView.as_view(), name="monthly-summary-list"),
-    path("api/summary/monthly-by-category/", MonthlyCategorySummaryView.as_view(), name="monthly-category-summary"),     
+    path("api/summary/monthly-by-category/", MonthlyCategorySummaryView.as_view(), name="monthly-category-summary"),
+    path("api/summary/yearly/", YearlySummaryView.as_view(), name="yearly-summary"),
     path("api/stores/suggestions/", StoreSuggestionsView.as_view(), name="store-suggestions"),
     path("api/import/rakuten/", RakutenCSVImportView.as_view(), name="import-rakuten"),
     path("api/import/mitsui/", MitsuiCSVImportView.as_view(), name="import-mitsui"),

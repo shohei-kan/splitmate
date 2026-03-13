@@ -13,6 +13,7 @@ from .serializers import (
     MonthStatusUpdateSerializer,
     MonthlyCategorySummarySerializer,
     MonthlySummaryListSerializer,
+    YearlySummarySerializer,
     StoreSuggestionsResponseSerializer,
     ExclusionRuleSerializer,
     AppSettingsSerializer,
@@ -594,6 +595,80 @@ class MonthlyCategorySummaryView(APIView):
         }
 
         serializer = MonthlyCategorySummarySerializer(summary)
+        return Response(serializer.data)
+
+
+class YearlySummaryView(APIView):
+    """
+    GET /api/summary/yearly/?year=YYYY
+
+    指定年の月別総支出とカテゴリ別内訳を返す。
+    """
+
+    def get(self, request, *args, **kwargs):
+        today = datetime.date.today()
+        try:
+            year = int(request.query_params.get("year", today.year))
+        except ValueError:
+            year = today.year
+
+        first_day = datetime.date(year, 1, 1)
+        last_day = datetime.date(year, 12, 31)
+        qs = Expense.objects.filter(date__gte=first_day, date__lte=last_day)
+
+        rows = (
+            qs.values("date__month", "category")
+            .annotate(amount=Sum("amount"))
+            .order_by("date__month", "category")
+        )
+
+        category_label_map = {c.value: c.label for c in Expense.Category}
+        months_map = {
+            month: {
+                "month": f"{year:04d}-{month:02d}",
+                "total_amount": 0,
+                "categories": [],
+            }
+            for month in range(1, 13)
+        }
+
+        category_buckets = {month: {} for month in range(1, 13)}
+        for row in rows:
+            month = row["date__month"]
+            category = row["category"] or Expense.Category.UNCATEGORIZED
+            amount = row["amount"] or 0
+            category_buckets[month][category] = amount
+
+        for month in range(1, 13):
+            month_categories = []
+            total_amount = 0
+            for category, amount in sorted(
+                category_buckets[month].items(),
+                key=lambda item: (-item[1], item[0]),
+            ):
+                month_categories.append(
+                    {
+                        "category": category,
+                        "label": category_label_map.get(category, category),
+                        "amount": amount,
+                    }
+                )
+                total_amount += amount
+
+            months_map[month]["categories"] = month_categories
+            months_map[month]["total_amount"] = total_amount
+
+        total_amount = qs.aggregate(total=Sum("amount"))["total"] or 0
+        total_count = qs.count()
+        summary = {
+            "year": year,
+            "total_amount": total_amount,
+            "average_monthly_amount": total_amount // 12,
+            "total_count": total_count,
+            "months": [months_map[month] for month in range(1, 13)],
+        }
+
+        serializer = YearlySummarySerializer(summary)
         return Response(serializer.data)
 
 
