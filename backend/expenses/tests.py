@@ -122,3 +122,120 @@ class SettingsApiTests(TestCase):
 
         self.assertEqual(res.status_code, 200)
         self.assertEqual(AppSettings.objects.count(), 1)
+
+
+class StoreSuggestionsApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = "/api/stores/suggestions/"
+
+    def test_returns_manual_stores_grouped_and_sorted_by_count(self):
+        Expense.objects.create(
+            date=datetime.date(2026, 3, 1),
+            store="オーケー",
+            amount=1000,
+            source=Expense.Source.MANUAL,
+        )
+        Expense.objects.create(
+            date=datetime.date(2026, 3, 2),
+            store="オーケー",
+            amount=1200,
+            source=Expense.Source.MANUAL,
+        )
+        Expense.objects.create(
+            date=datetime.date(2026, 3, 3),
+            store="西友",
+            amount=800,
+            source=Expense.Source.MANUAL,
+        )
+        Expense.objects.create(
+            date=datetime.date(2026, 3, 4),
+            store="CSV店舗",
+            amount=500,
+            source=Expense.Source.CSV_RAKUTEN,
+        )
+
+        res = self.client.get(self.url)
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(
+            res.data,
+            {
+                "stores": [
+                    {"name": "オーケー", "count": 2},
+                    {"name": "西友", "count": 1},
+                ]
+            },
+        )
+
+
+class MonthlyCategorySummaryApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = "/api/summary/monthly-by-category/"
+
+    def test_returns_monthly_category_breakdown(self):
+        Expense.objects.create(
+            date=datetime.date(2026, 3, 1),
+            store="A",
+            amount=3000,
+            category=Expense.Category.FOOD,
+        )
+        Expense.objects.create(
+            date=datetime.date(2026, 3, 5),
+            store="B",
+            amount=1000,
+            category=Expense.Category.FOOD,
+        )
+        Expense.objects.create(
+            date=datetime.date(2026, 3, 6),
+            store="C",
+            amount=2000,
+            category=Expense.Category.DAILY,
+        )
+        Expense.objects.create(
+            date=datetime.date(2026, 2, 10),
+            store="D",
+            amount=9999,
+            category=Expense.Category.OUTSIDE_FOOD,
+        )
+
+        res = self.client.get(self.url, {"month": "2026-03"})
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["month"], "2026-03")
+        self.assertEqual(res.data["total_amount"], 6000)
+        self.assertEqual(res.data["total_count"], 3)
+        self.assertEqual(
+            res.data["categories"],
+            [
+                {
+                    "category": "food",
+                    "label": "食費",
+                    "amount": 4000,
+                    "ratio": 66.7,
+                    "count": 2,
+                },
+                {
+                    "category": "daily",
+                    "label": "日用品",
+                    "amount": 2000,
+                    "ratio": 33.3,
+                    "count": 1,
+                },
+            ],
+        )
+
+    def test_accepts_legacy_year_month_params(self):
+        Expense.objects.create(
+            date=datetime.date(2026, 4, 1),
+            store="A",
+            amount=500,
+            category=Expense.Category.OTHER,
+        )
+
+        res = self.client.get(self.url, {"year": 2026, "month": 4})
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["month"], "2026-04")
+        self.assertEqual(res.data["total_amount"], 500)

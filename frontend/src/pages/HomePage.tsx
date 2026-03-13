@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 
-import { fetchMonthlySummary } from "../api/summary";
+import { fetchMonthlyCategorySummary, fetchMonthlySummary } from "../api/summary";
 import {
   fetchExpenses,
   createExpense,
@@ -15,6 +15,7 @@ import {
   deleteExpense,
   type UpdateExpenseInput,
 } from "../api/expenses";
+import { fetchStoreSuggestions } from "../api/stores";
 import type {
   Expense,
   CardUser,
@@ -29,6 +30,8 @@ import { DEFAULT_HIGHLIGHT_THRESHOLD, useSettings } from "../hooks/useSettings";
 import { qk } from "../lib/queryKeys";
 import { PageShell } from "../components/layout/PageShell";
 import { Card } from "../components/ui/Card";
+import { StoreCombobox } from "../components/expenses/StoreCombobox";
+import { HomeMonthlySummaryAccordion } from "../components/home/HomeMonthlySummaryAccordion";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -181,13 +184,30 @@ export function HomePage() {
     () => getMonthRangeISO(targetYM.year, targetYM.month),
     [targetYM.year, targetYM.month]
   );
+  const currentMonthKey = useMemo(
+    () => `${targetYM.year}-${pad2(targetYM.month)}`,
+    [targetYM.year, targetYM.month]
+  );
 
   const queryClient = useQueryClient();
+  const [isMonthlyBreakdownOpen, setIsMonthlyBreakdownOpen] = useState(false);
 
   const summaryQuery = useQuery({
     queryKey: qk.summaryMonth(targetYM.year, targetYM.month),
     queryFn: () => fetchMonthlySummary(targetYM.year, targetYM.month),
     refetchOnMount: "always",
+  });
+
+  const monthlyCategorySummaryQuery = useQuery({
+    queryKey: qk.summaryMonthlyCategory(currentMonthKey),
+    queryFn: () => fetchMonthlyCategorySummary(currentMonthKey),
+    enabled: isMonthlyBreakdownOpen,
+  });
+
+  const storeSuggestionsQuery = useQuery({
+    queryKey: qk.storeSuggestions(),
+    queryFn: fetchStoreSuggestions,
+    staleTime: 5 * 60 * 1000,
   });
 
   const expensesQuery = useQuery({
@@ -259,7 +279,7 @@ export function HomePage() {
   };
 
   const handleFormTextChange =
-    (field: "store" | "amount" | "memo") => (e: ChangeEvent<HTMLInputElement>) => {
+    (field: "amount" | "memo") => (e: ChangeEvent<HTMLInputElement>) => {
       const next = e.target.value;
       setFormTextField(field, isComposing ? next : toHalfWidthKatakanaAndDigits(next));
     };
@@ -269,7 +289,7 @@ export function HomePage() {
   };
 
   const handleFormCompositionEnd =
-    (field: "store" | "amount" | "memo") =>
+    (field: "amount" | "memo") =>
     (e: CompositionEvent<HTMLInputElement>) => {
       setIsComposing(false);
       setFormTextField(field, toHalfWidthKatakanaAndDigits(e.currentTarget.value));
@@ -303,12 +323,18 @@ export function HomePage() {
       setForm((p) => ({ ...p, store: "", amount: "", memo: "" }));
 
       // summary / expenses を更新
-    queryClient.invalidateQueries({
-      queryKey: qk.summaryMonth(targetYM.year, targetYM.month),
-    });
-    queryClient.invalidateQueries({
-      queryKey: qk.expensesMonth(targetYM.year, targetYM.month),
-    });
+      queryClient.invalidateQueries({
+        queryKey: qk.summaryMonth(targetYM.year, targetYM.month),
+      });
+      queryClient.invalidateQueries({
+        queryKey: qk.summaryMonthlyCategory(currentMonthKey),
+      });
+      queryClient.invalidateQueries({
+        queryKey: qk.expensesMonth(targetYM.year, targetYM.month),
+      });
+      queryClient.invalidateQueries({
+        queryKey: qk.storeSuggestions(),
+      });
     },
   });
 
@@ -317,10 +343,13 @@ export function HomePage() {
       updateExpense(id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: qk.summaryMonth(targetYM.year, targetYM.month),
+        queryKey: qk.summaryRoot(),
       });
       queryClient.invalidateQueries({
-        queryKey: qk.expensesMonth(targetYM.year, targetYM.month),
+        queryKey: qk.expensesRoot(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: qk.storeSuggestions(),
       });
     },
   });
@@ -333,10 +362,13 @@ export function HomePage() {
     mutationFn: (id: number) => deleteExpense(id),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: qk.summaryMonth(targetYM.year, targetYM.month),
+        queryKey: qk.summaryRoot(),
       });
       queryClient.invalidateQueries({
-        queryKey: qk.expensesMonth(targetYM.year, targetYM.month),
+        queryKey: qk.expensesRoot(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: qk.storeSuggestions(),
       });
     },
   });
@@ -443,6 +475,9 @@ export function HomePage() {
             queryKey: qk.summaryMonth(targetYM.year, targetYM.month),
           });
           queryClient.invalidateQueries({
+            queryKey: qk.summaryMonthlyCategory(currentMonthKey),
+          });
+          queryClient.invalidateQueries({
             queryKey: qk.expensesMonth(targetYM.year, targetYM.month),
           });
         },
@@ -537,6 +572,14 @@ export function HomePage() {
           <Summary title="振込（ママ→パパ）" value={data ? yen(data.transfer_amount) : null} blue />
         </div>
 
+        <HomeMonthlySummaryAccordion
+          isOpen={isMonthlyBreakdownOpen}
+          onToggle={() => setIsMonthlyBreakdownOpen((prev) => !prev)}
+          data={monthlyCategorySummaryQuery.data}
+          isLoading={monthlyCategorySummaryQuery.isLoading || monthlyCategorySummaryQuery.isFetching}
+          error={monthlyCategorySummaryQuery.error as Error | null}
+        />
+
         <Card className="p-5 sm:p-6">
           <div className="text-2xl font-bold text-[#143A61]">支出を追加</div>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -546,13 +589,14 @@ export function HomePage() {
               value={form.date}
               onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))}
             />
-            <input
-              className="h-11 rounded-xl border border-[#D1DCE8] bg-white px-4 text-base placeholder:text-[#91A2B4]"
+            <StoreCombobox
+              inputClassName="h-11 rounded-xl border border-[#D1DCE8] bg-white px-4 text-base placeholder:text-[#91A2B4]"
               value={form.store}
-              onCompositionStart={handleFormCompositionStart}
-              onCompositionEnd={handleFormCompositionEnd("store")}
-              onChange={handleFormTextChange("store")}
-              placeholder="購入先"
+              suggestions={storeSuggestionsQuery.data?.stores ?? []}
+              onValueChange={(value) =>
+                setFormTextField("store", toHalfWidthKatakanaAndDigits(value))
+              }
+              placeholder="店名を入力または選択"
             />
             <input
               className="h-11 rounded-xl border border-[#D1DCE8] bg-white px-4 text-base placeholder:text-[#91A2B4]"

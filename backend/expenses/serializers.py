@@ -64,22 +64,29 @@ class MonthlySummaryListSerializer(serializers.Serializer):
     status = serializers.CharField(allow_null=True)
     items = MonthlySummaryListItemSerializer(many=True)
 
-    
-    
-class CategorySummaryItemSerializer(serializers.Serializer):
+
+class StoreSuggestionSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    count = serializers.IntegerField()
+
+
+class StoreSuggestionsResponseSerializer(serializers.Serializer):
+    stores = StoreSuggestionSerializer(many=True)
+
+
+class MonthlyCategoryBreakdownItemSerializer(serializers.Serializer):
     category = serializers.CharField()
-    category_label = serializers.CharField()
-    shared_total = serializers.IntegerField()
-    wife_only_total = serializers.IntegerField()
-    me_only_total = serializers.IntegerField()
-    total = serializers.IntegerField()
+    label = serializers.CharField()
+    amount = serializers.IntegerField()
+    ratio = serializers.FloatField()
+    count = serializers.IntegerField()
 
 
 class MonthlyCategorySummarySerializer(serializers.Serializer):
-    year = serializers.IntegerField()
-    month = serializers.IntegerField()
-    status = serializers.CharField(allow_null=True)
-    items = CategorySummaryItemSerializer(many=True)
+    month = serializers.CharField()
+    total_amount = serializers.IntegerField()
+    total_count = serializers.IntegerField()
+    categories = MonthlyCategoryBreakdownItemSerializer(many=True)
 
 
 class MonthStatusUpdateSerializer(serializers.Serializer):

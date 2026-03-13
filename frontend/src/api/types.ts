@@ -9,6 +9,30 @@ export interface MonthlySummary {
   transfer_amount: number;
 }
 
+export interface MonthlyCategorySummaryItem {
+  category: Category;
+  label: string;
+  amount: number;
+  ratio: number;
+  count: number;
+}
+
+export interface MonthlyCategorySummary {
+  month: string;
+  total_amount: number;
+  total_count: number;
+  categories: MonthlyCategorySummaryItem[];
+}
+
+export interface StoreSuggestion {
+  name: string;
+  count: number;
+}
+
+export interface StoreSuggestionsResponse {
+  stores: StoreSuggestion[];
+}
+
 export type CardUser = "me" | "wife" | "unknown";
 export type Payer = "me" | "wife" | "unknown";
 export type BurdenType = "shared" | "wife_only" | "me_only";

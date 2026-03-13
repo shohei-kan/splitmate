@@ -1,7 +1,7 @@
 import datetime
 import calendar
 
-from django.db.models import Sum
+from django.db.models import Sum, Count
 from rest_framework import viewsets, filters, parsers, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -13,6 +13,7 @@ from .serializers import (
     MonthStatusUpdateSerializer,
     MonthlyCategorySummarySerializer,
     MonthlySummaryListSerializer,
+    StoreSuggestionsResponseSerializer,
     ExclusionRuleSerializer,
     AppSettingsSerializer,
     )
@@ -24,6 +25,25 @@ def _get_or_create_app_settings() -> AppSettings:
     if settings:
         return settings
     return AppSettings.objects.create()
+
+
+def _resolve_year_month(params):
+    month_param = params.get("month")
+    if month_param:
+        try:
+            parsed = datetime.date.fromisoformat(f"{month_param}-01")
+            return parsed.year, parsed.month
+        except ValueError:
+            pass
+
+    today = datetime.date.today()
+    try:
+        year = int(params.get("year", today.year))
+        month = int(params.get("month", today.month))
+        datetime.date(year, month, 1)
+        return year, month
+    except ValueError:
+        return today.year, today.month
 
 
 class ExpenseViewSet(viewsets.ModelViewSet):
@@ -136,6 +156,33 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         （CSV インポートは別経路で作成しているので影響なし）
         """
         serializer.save(source=Expense.Source.MANUAL)
+
+
+class StoreSuggestionsView(APIView):
+    """
+    GET /api/stores/suggestions/
+
+    手入力で作成された expense から店名候補を返す。
+    """
+
+    def get(self, request, *args, **kwargs):
+        rows = (
+            Expense.objects.filter(source=Expense.Source.MANUAL)
+            .exclude(store="")
+            .values("store")
+            .annotate(count=Count("id"))
+            .order_by("-count", "store")[:20]
+        )
+
+        data = {
+            "stores": [
+                {"name": row["store"], "count": row["count"]}
+                for row in rows
+                if row["store"].strip()
+            ]
+        }
+        serializer = StoreSuggestionsResponseSerializer(data)
+        return Response(serializer.data)
 
 
 #月別サマリー
@@ -494,22 +541,15 @@ class MonthStatusUpdateView(APIView):
 
 class MonthlyCategorySummaryView(APIView):
     """
-    GET /api/summary/monthly-by-category/?year=YYYY&month=MM&status=draft|final
+    GET /api/summary/monthly-by-category/?month=YYYY-MM
+    GET /api/summary/monthly-by-category/?year=YYYY&month=MM
 
     指定した年月の支出をカテゴリ別に集計して返す。
-    status を指定すると draft/final でフィルタできる。
     """
 
     def get(self, request, *args, **kwargs):
-        today = datetime.date.today()
         params = request.query_params
-
-        try:
-            year = int(params.get("year", today.year))
-            month = int(params.get("month", today.month))
-        except ValueError:
-            year = today.year
-            month = today.month
+        year, month = _resolve_year_month(params)
 
         # 対象月の1日〜末日
         first_day = datetime.date(year, month, 1)
@@ -519,73 +559,38 @@ class MonthlyCategorySummaryView(APIView):
             last_day = datetime.date(year, month + 1, 1) - datetime.timedelta(days=1)
 
         qs = Expense.objects.filter(date__gte=first_day, date__lte=last_day)
+        total_amount = qs.aggregate(total=Sum("amount"))["total"] or 0
+        total_count = qs.count()
 
-        # draft/final で絞る（指定なしなら両方）
-        status_value = params.get("status")
-        if status_value in dict(Expense.Status.choices):
-            qs = qs.filter(status=status_value)
-        else:
-            status_value = None  # 応答用
-
-        # category × burden_type ごとの合計をまとめて1クエリで取得
         rows = (
-            qs.values("category", "burden_type")
-            .annotate(total=Sum("amount"))
-            .order_by("category", "burden_type")
+            qs.values("category")
+            .annotate(amount=Sum("amount"), count=Count("id"))
+            .order_by("-amount", "category")
         )
 
-        # カテゴリごとに合算
-        category_map = {}
-        for row in rows:
-            category = row["category"] or Expense.Category.UNCATEGORIZED
-            burden_type = row["burden_type"]
-            total = row["total"] or 0
-
-            if category not in category_map:
-                category_map[category] = {
-                    "shared_total": 0,
-                    "wife_only_total": 0,
-                    "me_only_total": 0,
-                }
-
-            if burden_type == Expense.BurdenType.SHARED:
-                category_map[category]["shared_total"] += total
-            elif burden_type == Expense.BurdenType.WIFE_ONLY:
-                category_map[category]["wife_only_total"] += total
-            elif burden_type == Expense.BurdenType.ME_ONLY:
-                category_map[category]["me_only_total"] += total
-
-        # Category TextChoices からラベル解決
         category_label_map = {c.value: c.label for c in Expense.Category}
-
-        items = []
-        for category, data in category_map.items():
-            shared_total = data["shared_total"]
-            wife_only_total = data["wife_only_total"]
-            me_only_total = data["me_only_total"]
-            total = shared_total + wife_only_total + me_only_total
-
-            items.append(
+        categories = []
+        for row in rows:
+            amount = row["amount"] or 0
+            if amount <= 0:
+                continue
+            category = row["category"] or Expense.Category.UNCATEGORIZED
+            ratio = round((amount / total_amount) * 100, 1) if total_amount > 0 else 0.0
+            categories.append(
                 {
                     "category": category,
-                    "category_label": category_label_map.get(
-                        category, category
-                    ),
-                    "shared_total": shared_total,
-                    "wife_only_total": wife_only_total,
-                    "me_only_total": me_only_total,
-                    "total": total,
+                    "label": category_label_map.get(category, category),
+                    "amount": amount,
+                    "ratio": ratio,
+                    "count": row["count"],
                 }
             )
 
-        # カテゴリコード順でソートしておく（UI側で並べ替えてもOK）
-        items.sort(key=lambda x: x["category"])
-
         summary = {
-            "year": year,
-            "month": month,
-            "status": status_value,
-            "items": items,
+            "month": f"{year:04d}-{month:02d}",
+            "total_amount": total_amount,
+            "total_count": total_count,
+            "categories": categories,
         }
 
         serializer = MonthlyCategorySummarySerializer(summary)
