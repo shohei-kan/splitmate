@@ -1,62 +1,61 @@
 # Codex作業サマリー
 
 ## 1. 今回の目的
-- Summary 月次でカテゴリ選択時のスクロール位置を自然にする
-- 明細件数が少ないときは詳細全体が見やすく、件数が多いときは詳細上部から読めるようにする
+- Home 月次グラフの hover tooltip を、見た目を大きく変えずに画面端で見切れにくくする
 
 ## 2. 確認した状況
-- `frontend/src/components/summary/MonthlySummaryPanel.tsx` は、カテゴリ選択時に `detailSectionRef.current.scrollIntoView({ block: "start" })` で常に上端合わせのスクロールをしていた
-- そのため、明細件数が少ない場合でも詳細カードが中途半端な位置に止まりやすかった
-- 既存の `カテゴリ別詳細へ` ボタンも同じ上端合わせ前提だった
+- `frontend/src/components/home/MonthlyCategoryBarChart.tsx` の tooltip は absolute 配置で `left-0` 固定、上方向固定だった
+- そのため、hover 位置によっては右端や上端ではみ出しやすかった
+- tooltip 内容自体は問題なく、長い店名の折り返しも維持すればよかった
 - 関連ファイル:
-  - `frontend/src/components/summary/MonthlySummaryPanel.tsx`
+  - `frontend/src/components/home/MonthlyCategoryBarChart.tsx`
 
 ## 3. 原因
 ### 確定
-- スクロール位置が詳細セクションの実高さを見ずに固定で `block: "start"` になっていた
+- tooltip の表示位置が CSS 固定で、hover 対象の viewport 上の位置を見ていなかった
 
 ### 仮説
-- 将来的に sticky header が増える場合は、現在の `24px` マージンを調整したほうが見切れにくくなる可能性がある
+- スクロールコンテナがさらに複雑になると、将来的には再計算タイミングの微調整が必要になる可能性がある
 
 ## 4. 実施した変更
 - 変更したファイル一覧:
-  - `frontend/src/components/summary/MonthlySummaryPanel.tsx`
+  - `frontend/src/components/home/MonthlyCategoryBarChart.tsx`
   - `docs/codex-handoff.md`
 - 各ファイルで何を変えたか:
-  - `frontend/src/components/summary/MonthlySummaryPanel.tsx`
-    - 詳細セクションの高さと viewport 高さを比較して、スクロール位置を切り替える `scrollToDetailSection` を追加
-    - 詳細セクションが画面内に収まる場合は、カード下端が viewport 下端に寄る位置までスクロールするようにした
-    - 詳細セクションが長い場合は、従来どおり上端を見せる位置までスクロールするようにした
-    - カテゴリ選択時は明細取得完了後に 1 回だけこのスクロールを走らせるよう、`pendingScrollRef` を追加した
-    - `カテゴリ別詳細へ` ボタンも同じスクロールロジックを使うようにした
+  - `frontend/src/components/home/MonthlyCategoryBarChart.tsx`
+    - グラフ 1 行分を `MonthlyCategoryBarChartRow` に分け、tooltip の表示状態と配置計算をその中で持つようにした
+    - `getBoundingClientRect()` と viewport 幅を使って、tooltip の横位置を `left / center / right` で切り替えるようにした
+    - tooltip の実高さを見て、上に出せない場合は下に出すようにした
+    - `resize` と `scroll` 時にも配置を再計算するようにした
+    - 既存の見た目トーンは維持し、tooltip の中身やスタイルはほぼ据え置いた
 - 破壊的変更:
   - なし
 
 ## 5. テスト・確認結果
 - 実行したコマンド:
-  - `sed -n '1,340p' frontend/src/components/summary/MonthlySummaryPanel.tsx`
-  - `sed -n '1,200p' frontend/src/components/ui/Card.tsx`
+  - `sed -n '1,260p' frontend/src/components/home/MonthlyCategoryBarChart.tsx`
+  - `npm run build`
   - `npm run build`
 - 成功したこと:
-  - `npm run build` 成功
-  - Summary 月次のスクロール条件分岐を入れた状態で frontend build が通った
+  - 2 回目の `npm run build` 成功
+  - tooltip の軽い位置計算実装を入れた状態で frontend build が通った
 - 失敗したこと:
-  - なし
+  - 1 回目の `npm run build` は未使用変数 `viewportHeight` が残って失敗したが、削除後は成功
 - 未実施の確認:
-  - ブラウザで件数が少ないカテゴリと多いカテゴリの両方を選んだときの実スクロール確認
-  - モバイル幅での見え方確認
+  - ブラウザで左端・右端・上端付近の hover 実操作確認
+  - モバイル幅での tooltip 見え方確認
 
 ## 6. 未解決事項
-- スクロール基準のマージンは現在 `24px` 固定
-- 「件数が少ない」の判定は件数ではなく実際の描画高さベースにしている
+- 今回は軽い位置計算のみで、tooltip が hover 中にカーソルへ追従する実装は入れていない
+- 横位置は `left / center / right` の 3 段階切替なので、さらに細かい位置調整は未対応
 
 ## 7. 次にやるなら
-1. 実画面で少件数・多件数カテゴリの両方を確認して、スクロール位置の体感を調整する
-2. 必要なら `24px` のマージン値や `scroll-mt` を微調整する
-3. もし URL 共有性が必要なら、選択カテゴリもクエリに持たせるか検討する
+1. 実画面で左右端と上端の hover を確認して、必要なら余白値を微調整する
+2. 必要ならモバイル幅で tooltip 幅を少し縮める条件を追加する
+3. 年次グラフ tooltip にも同様の軽い端寄せロジックが必要か確認する
 
 ## 8. ChatGPTに相談したいこと
-- Summary 月次のカテゴリ別詳細スクロールは高さベース判定にしたが、UX 的に件数ベースやテーブル行数ベースのほうがわかりやすいか判断材料がほしい
+- tooltip の端寄せは 3 段階切替にしたが、UX 的にこれで十分か、もう少しだけ中央寄せ補正を足すべきか判断材料がほしい
 
 ## 9. ChatGPTに次に頼む依頼文
-- SplitMate の Summary 月次では、カテゴリ選択時の詳細スクロール位置を「詳細セクションの実高さが viewport に収まるかどうか」で切り替える実装にしています。UX の観点で、この高さベース判定は妥当か、それとも件数や行数ベースのほうがわかりやすいか整理してください。
+- SplitMate の Home 月次グラフ tooltip は、現在 `left / center / right` と `top / bottom` の軽い切替で画面端対応しています。この方式のままで十分か、見た目を崩さずにもう少し自然な位置補正を足すならどの程度が妥当か整理してください。
