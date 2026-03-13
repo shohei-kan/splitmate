@@ -74,12 +74,19 @@ class StoreSuggestionsResponseSerializer(serializers.Serializer):
     stores = StoreSuggestionSerializer(many=True)
 
 
+class MonthlyCategoryTopExpenseSerializer(serializers.Serializer):
+    date = serializers.DateField()
+    store = serializers.CharField()
+    amount = serializers.IntegerField()
+
+
 class MonthlyCategoryBreakdownItemSerializer(serializers.Serializer):
     category = serializers.CharField()
     label = serializers.CharField()
     amount = serializers.IntegerField()
     ratio = serializers.FloatField()
     count = serializers.IntegerField()
+    top_expenses = MonthlyCategoryTopExpenseSerializer(many=True)
 
 
 class MonthlyCategorySummarySerializer(serializers.Serializer):

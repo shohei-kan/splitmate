@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { PageShell } from "../components/layout/PageShell";
 import { SummaryTabs } from "../components/summary/SummaryTabs";
@@ -8,7 +9,12 @@ import { YearlySummaryPanel } from "../components/summary/YearlySummaryPanel";
 type SummaryTab = "monthly" | "yearly";
 
 export function SummaryPage() {
-  const [activeTab, setActiveTab] = useState<SummaryTab>("monthly");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = useMemo<SummaryTab>(() => {
+    const tab = searchParams.get("tab");
+    return tab === "yearly" ? "yearly" : "monthly";
+  }, [searchParams]);
+  const monthParam = searchParams.get("month") ?? undefined;
 
   return (
     <PageShell>
@@ -20,10 +26,17 @@ export function SummaryPage() {
           </div>
         </div>
 
-        <SummaryTabs activeTab={activeTab} onChange={setActiveTab} />
+        <SummaryTabs
+          activeTab={activeTab}
+          onChange={(tab) => {
+            const next = new URLSearchParams(searchParams);
+            next.set("tab", tab);
+            setSearchParams(next);
+          }}
+        />
 
         {activeTab === "monthly" ? (
-          <MonthlySummaryPanel />
+          <MonthlySummaryPanel initialMonth={monthParam} />
         ) : (
           <YearlySummaryPanel />
         )}

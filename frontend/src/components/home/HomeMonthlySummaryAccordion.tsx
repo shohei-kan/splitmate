@@ -48,7 +48,7 @@ export function HomeMonthlySummaryAccordion({
                 <div>総支出: {yen(data.total_amount)}</div>
                 <div>件数: {data.total_count}件</div>
               </div>
-              <MonthlyCategoryBarChart items={data.categories} />
+              <MonthlyCategoryBarChart items={data.categories} showTopExpenses />
             </div>
           ) : (
             <div className="text-sm text-[#6A7C8E]">表示できる集計がありません。</div>

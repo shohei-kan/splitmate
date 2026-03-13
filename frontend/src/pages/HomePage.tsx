@@ -582,7 +582,7 @@ export function HomePage() {
 
         <div className="flex justify-end">
           <Link
-            to="/summary"
+            to={`/summary?tab=monthly&month=${currentMonthKey}`}
             className="inline-flex items-center rounded-full border border-[#D1DCE8] bg-white px-4 py-2 text-sm font-semibold text-[#143A61] hover:bg-[#F7FAFD]"
           >
             集計を見る

@@ -1,62 +1,72 @@
 # Codex作業サマリー
 
 ## 1. 今回の目的
-- SplitMate の README に、Phase 3-1〜3-3.1 の実装内容を自然な形で追記し、現在の機能と今後の見通しを分かりやすくする
+- Home 月次グラフの hover tooltip で長い店名が重ならないようにする
+- Summary 月次でカテゴリ選択時に、下部のカテゴリ別詳細へ自然に移動できるようにする
 
 ## 2. 確認した状況
-- 既存 README はセットアップ、開発コマンド、本番デプロイ、API 契約の情報が中心だった
-- Home / Summary の画面機能や、Phase 3 系で追加した UI 改善は README に十分反映されていなかった
-- Summary ページや年次グラフの存在は README 上でまだ明示されていなかった
+- `frontend/src/components/home/MonthlyCategoryBarChart.tsx` の hover tooltip は、上位明細を 1 行グリッドで表示しており、長い店名が金額列に食い込みやすかった
+- `frontend/src/components/summary/MonthlySummaryPanel.tsx` にはカテゴリ別明細セクション自体はあり、`カテゴリ別詳細へ` ボタンもあった
+- 同ファイルには `detailSectionRef` と `selectedCategory` 変更時の `scrollIntoView` もすでに入っていたが、カテゴリ選択処理が散っていた
 - 関連ファイル:
-  - `README.md`
+  - `frontend/src/components/home/MonthlyCategoryBarChart.tsx`
+  - `frontend/src/components/summary/MonthlySummaryPanel.tsx`
 
 ## 3. 原因
 ### 確定
-- README の機能紹介が Phase 3 実装前ベースのままで、最近の UI / 画面追加とズレていた
+- tooltip の明細行が `日付 / 店名 / 金額` の横並び前提で、長い店名を十分に逃がせていなかった
+- Summary 月次のカテゴリ選択導線は存在したが、詳細セクションへの移動が UI 上で伝わりにくかった
 
 ### 仮説
-- 将来さらに README が長くなってきたら、画面紹介や運用メモを `docs/` に分離する余地がある
+- tooltip の表示位置は画面端条件によっては今後まだ微調整が必要かもしれない
 
 ## 4. 実施した変更
 - 変更したファイル一覧:
-  - `README.md`
+  - `frontend/src/components/home/MonthlyCategoryBarChart.tsx`
+  - `frontend/src/components/summary/MonthlySummaryPanel.tsx`
   - `docs/codex-handoff.md`
 - 各ファイルで何を変えたか:
-  - `README.md`
-    - `Current Features` を追加
-    - `Pages` を追加
-    - `Summary Features` を追加
-    - `Recent Updates` を追加
-    - API エンドポイント一覧に `stores/suggestions`, `monthly-by-category`, `yearly` を追記
-    - `Roadmap` を追加
-    - Home の月次アコーディオン、店名候補 + 自由入力、Summary ページ、Summary 月次 / 年次、年次グラフの凡例 / tooltip / 配色改善を反映
-    - Roadmap に CSV取込時のカテゴリ自動提案 / 自動分類、GitHub Actions の手動実行型 CD、グラフ UI 微調整、店名候補 UI の他画面展開を追記
-  - `docs/codex-handoff.md`
-    - 今回の README 更新内容に差し替え
+  - `frontend/src/components/home/MonthlyCategoryBarChart.tsx`
+    - tooltip 幅を少し広げ、viewport 幅を超えにくい制約を追加
+    - 上位明細 1 件ごとを 2 段表示に変更し、1 段目に `日付 / 金額`、2 段目に店名を出すようにした
+    - 店名は `break-words` で折り返すようにして、長い文字列でも金額と重ならないようにした
+  - `frontend/src/components/summary/MonthlySummaryPanel.tsx`
+    - カテゴリ選択処理を `selectCategory` にまとめた
+    - グラフと一覧の両方から同じ選択処理を使うようにした
+    - 詳細セクションに `scroll-mt-24` を付けて、スクロール先の見切れを減らした
+    - 既存のカテゴリ選択時スクロールをそのまま活かしつつ、詳細セクションへの移動を自然にした
 - 破壊的変更:
   - なし
-  - ドキュメント更新のみ
 
 ## 5. テスト・確認結果
 - 実行したコマンド:
-  - `sed -n '1,320p' README.md`
+  - `sed -n '1,260p' frontend/src/components/home/MonthlyCategoryBarChart.tsx`
+  - `sed -n '1,320p' frontend/src/components/summary/MonthlySummaryPanel.tsx`
+  - `sed -n '320,520p' frontend/src/components/summary/MonthlySummaryPanel.tsx`
+  - `sed -n '1,220p' docs/codex-handoff-prompt.md`
+  - `npm run build`
+  - `git status --short`
 - 成功したこと:
-  - README に現在の画面構成と Summary 機能、最近の更新内容、Roadmap を追記できた
+  - `npm run build` 成功
+  - tooltip の長い店名を 2 段表示で崩れにくくした状態で build が通った
+  - Summary 月次のカテゴリ選択導線を整理した状態で build が通った
 - 失敗したこと:
   - なし
 - 未実施の確認:
-  - README のレンダリング確認
+  - ブラウザで長い店名を含む tooltip の実表示確認
+  - モバイル幅での tooltip 位置確認
 
 ## 6. 未解決事項
-- README は情報量が増えてきているため、今後さらに詳細な仕様や運用メモが増える場合は分割を検討してよい
+- Home の tooltip は左寄せ固定なので、画面端での表示位置最適化まではまだしていない
+- Summary 月次の詳細移動は同一ページ内スクロールで対応しており、別ページの詳細画面は未追加
 
 ## 7. 次にやるなら
-1. GitHub やエディタ上で README のレンダリングを確認する
-2. 必要なら Summary 画面のスクリーンショットや GIF を後から追加する
-3. ロードマップの優先順位を定期的に見直す
+1. ブラウザで長い店名の hover tooltip を確認して、必要なら幅と表示位置を微調整する
+2. Summary 月次のカテゴリ別詳細を URL クエリと連動させるか検討する
+3. 将来的に必要ならカテゴリ別詳細の専用ページ化を検討する
 
 ## 8. ChatGPTに相談したいこと
-- README の情報量がさらに増えた時に、どの単位で `docs/` へ分割すると読みやすさを維持しやすいか整理したい
+- Home の hover tooltip を画面端でも崩れにくくするには、CSS のみで十分か、軽い位置計算を入れるべきか判断材料がほしい
 
 ## 9. ChatGPTに次に頼む依頼文
-- SplitMate の README が Phase 3 系の追記で長くなってきた前提で、README に残すべき情報と `docs/` に分けるべき情報の切り分け方を、OSS 風の読みやすさを保つ観点で整理してください。
+- SplitMate の Home 月次グラフ tooltip は現在 CSS ベースで表示しており、長い店名の折り返し対応までは入っています。次の改善として、画面端ではみ出しにくくするには CSS だけでどこまで対応すべきか、軽い位置計算を入れるならどの程度の実装が妥当かを整理してください。

@@ -47,6 +47,7 @@ export function fetchExpenses(params: {
   dateTo: string;   // YYYY-MM-DD
   ordering?: string; // ex: "-date"
   search?: string;
+  category?: Category;
   page?: number; // optional
 }) {
   const q = new URLSearchParams({
@@ -56,6 +57,7 @@ export function fetchExpenses(params: {
   });
 
   if (params.search) q.set("search", params.search);
+  if (params.category) q.set("category", params.category);
   if (params.page) q.set("page", String(params.page));
 
   return apiFetch<Paginated<Expense>>(`/api/expenses/?${q.toString()}`);

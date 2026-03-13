@@ -215,6 +215,10 @@ class MonthlyCategorySummaryApiTests(TestCase):
                     "amount": 4000,
                     "ratio": 66.7,
                     "count": 2,
+                    "top_expenses": [
+                        {"date": "2026-03-01", "store": "A", "amount": 3000},
+                        {"date": "2026-03-05", "store": "B", "amount": 1000},
+                    ],
                 },
                 {
                     "category": "daily",
@@ -222,6 +226,9 @@ class MonthlyCategorySummaryApiTests(TestCase):
                     "amount": 2000,
                     "ratio": 33.3,
                     "count": 1,
+                    "top_expenses": [
+                        {"date": "2026-03-06", "store": "C", "amount": 2000},
+                    ],
                 },
             ],
         )
@@ -239,6 +246,38 @@ class MonthlyCategorySummaryApiTests(TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.data["month"], "2026-04")
         self.assertEqual(res.data["total_amount"], 500)
+
+    def test_returns_top_expenses_descending_by_amount(self):
+        Expense.objects.create(
+            date=datetime.date(2026, 5, 1),
+            store="",
+            amount=1500,
+            category=Expense.Category.FOOD,
+        )
+        Expense.objects.create(
+            date=datetime.date(2026, 5, 2),
+            store="High",
+            amount=5000,
+            category=Expense.Category.FOOD,
+        )
+        Expense.objects.create(
+            date=datetime.date(2026, 5, 3),
+            store="Mid",
+            amount=3000,
+            category=Expense.Category.FOOD,
+        )
+
+        res = self.client.get(self.url, {"month": "2026-05"})
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(
+            res.data["categories"][0]["top_expenses"],
+            [
+                {"date": "2026-05-02", "store": "High", "amount": 5000},
+                {"date": "2026-05-03", "store": "Mid", "amount": 3000},
+                {"date": "2026-05-01", "store": "（店名なし）", "amount": 1500},
+            ],
+        )
 
 
 class YearlySummaryApiTests(TestCase):

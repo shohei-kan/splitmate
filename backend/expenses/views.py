@@ -577,6 +577,11 @@ class MonthlyCategorySummaryView(APIView):
                 continue
             category = row["category"] or Expense.Category.UNCATEGORIZED
             ratio = round((amount / total_amount) * 100, 1) if total_amount > 0 else 0.0
+            top_expenses = list(
+                qs.filter(category=category)
+                .order_by("-amount", "-date", "id")[:5]
+                .values("date", "store", "amount")
+            )
             categories.append(
                 {
                     "category": category,
@@ -584,6 +589,14 @@ class MonthlyCategorySummaryView(APIView):
                     "amount": amount,
                     "ratio": ratio,
                     "count": row["count"],
+                    "top_expenses": [
+                        {
+                            "date": expense["date"],
+                            "store": expense["store"].strip() if expense["store"].strip() else "（店名なし）",
+                            "amount": expense["amount"],
+                        }
+                        for expense in top_expenses
+                    ],
                 }
             )
 

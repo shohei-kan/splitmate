@@ -15,6 +15,11 @@ export interface MonthlyCategorySummaryItem {
   amount: number;
   ratio: number;
   count: number;
+  top_expenses: Array<{
+    date: string;
+    store: string;
+    amount: number;
+  }>;
 }
 
 export interface MonthlyCategorySummary {
