@@ -7,6 +7,7 @@ type NavItem = {
 
 const items: NavItem[] = [
   { label: "ホーム", to: "/" },
+  { label: "集計", to: "/summary" },
   { label: "CSV", to: "/csv" },
   { label: "設定", to: "/settings" },
 ];

@@ -5,7 +5,7 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { fetchMonthlyCategorySummary, fetchMonthlySummary } from "../api/summary";
 import {
@@ -579,6 +579,15 @@ export function HomePage() {
           isLoading={monthlyCategorySummaryQuery.isLoading || monthlyCategorySummaryQuery.isFetching}
           error={monthlyCategorySummaryQuery.error as Error | null}
         />
+
+        <div className="flex justify-end">
+          <Link
+            to="/summary"
+            className="inline-flex items-center rounded-full border border-[#D1DCE8] bg-white px-4 py-2 text-sm font-semibold text-[#143A61] hover:bg-[#F7FAFD]"
+          >
+            集計を見る
+          </Link>
+        </div>
 
         <Card className="p-5 sm:p-6">
           <div className="text-2xl font-bold text-[#143A61]">支出を追加</div>
