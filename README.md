@@ -11,6 +11,68 @@
 - 月次サマリー、年次（月別）サマリー、カテゴリ別サマリー
 - 対象月の `draft` / `final` 一括更新
 
+## Current Features
+
+- Home で対象月の精算サマリーカードを表示
+- Home に月次内訳アコーディオンを追加し、カテゴリ別横棒グラフで当月内訳を確認可能
+- 手入力フォームで店名候補の選択と自由入力の両方に対応
+- Summary ページ（`/summary`）で月次・年次の集計を表示
+- Summary 月次タブで、総支出・件数・カテゴリ別横棒グラフ・カテゴリ一覧を確認可能
+- Summary 年次タブで、年間総支出・月平均・年間件数・年次積み上げ棒グラフ・カテゴリ別月次棒グラフを確認可能
+
+## Pages
+
+- `/`: Home
+  - 精算サマリーカード
+  - 月次内訳アコーディオン
+  - 手入力フォーム
+  - 対象月の支出一覧
+- `/summary`: Summary
+  - 月次タブ
+  - 年次タブ
+- `/csv`: CSV import
+- `/settings`: 設定
+
+## Summary Features
+
+### 月次
+
+- 前月 / 次月切替
+- 総支出
+- 件数
+- カテゴリ別横棒グラフ
+- カテゴリ別一覧
+
+### 年次
+
+- 前年 / 次年切替
+- 年間総支出
+- 月平均
+- 年間件数
+- 月別の積み上げ棒グラフ
+- 選択カテゴリの月別棒グラフ
+- 凡例表示
+- ツールチップ表示
+- 年次グラフ用の見分けやすい淡色パレット
+
+## Recent Updates
+
+- Phase 3-1:
+  - 手入力フォームの店名候補 API を追加
+  - Home に月次内訳アコーディオンを追加
+- Phase 3-2:
+  - Summary ページ（`/summary`）を追加
+  - 月次タブを実装
+  - Home から Summary への導線を追加
+- Phase 3-3:
+  - 年次集計 API（`/api/summary/yearly/`）を追加
+  - Summary の年次タブを実装
+  - 年次積み上げ棒グラフとカテゴリ別棒グラフを追加
+- Phase 3-3.1:
+  - 年次グラフの凡例を強化
+  - 年次グラフにツールチップを追加
+  - 年次グラフ配色を見分けやすく調整
+
 ## 技術スタック
 
 - Backend: Django 4.2, Django REST Framework
@@ -207,7 +269,9 @@ frontend の API 呼び出しは `/api/...` の相対パス前提のままです
 - `GET/PATCH/DELETE /api/exclusion-rules/{id}/`
 - `GET /api/summary/monthly/?year=YYYY&month=MM[&status=draft|final]`
 - `GET /api/summary/monthly-list/?year=YYYY[&status=draft|final]`
-- `GET /api/summary/monthly-by-category/?year=YYYY&month=MM[&status=draft|final]`
+- `GET /api/summary/monthly-by-category/?month=YYYY-MM`
+- `GET /api/summary/yearly/?year=YYYY`
+- `GET /api/stores/suggestions/`
 - `POST /api/import/rakuten/?card_user=me|wife|unknown`（multipart の `file` 必須）
 - `POST /api/import/mitsui/?card_user=me|wife|unknown`（multipart の `file` 必須）
 - `POST /api/month/status/`
@@ -352,6 +416,14 @@ curl -X POST "http://localhost:8000/api/import/rakuten/?card_user=unknown" \
   ]
 }
 ```
+
+## Roadmap
+
+- CSV取込時のカテゴリ自動提案 / 自動分類
+- GitHub Actions の手動実行型 CD
+- 必要に応じたグラフ UI の微調整
+- 店名候補 UI の他画面展開
+- 年次集計の追加分析（前年比較、補助指標など）
 
 移行注意点:
 
