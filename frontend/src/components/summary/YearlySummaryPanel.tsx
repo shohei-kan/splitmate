@@ -59,7 +59,11 @@ export function YearlySummaryPanel() {
         </Card>
       ) : summaryQuery.data ? (
         <>
-          <YearlyOverviewChartSection data={summaryQuery.data} />
+          <YearlyOverviewChartSection
+            data={summaryQuery.data}
+            selectedCategory={selectedCategory}
+            onSelectCategory={setSelectedCategory}
+          />
           <YearlyCategoryDetailSection
             data={summaryQuery.data}
             selectedCategory={selectedCategory}

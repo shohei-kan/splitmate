@@ -5,9 +5,15 @@ import { YearlyStackedBarChart } from "./YearlyStackedBarChart";
 
 type YearlyOverviewChartSectionProps = {
   data: YearlySummary;
+  selectedCategory: string;
+  onSelectCategory: (category: string) => void;
 };
 
-export function YearlyOverviewChartSection({ data }: YearlyOverviewChartSectionProps) {
+export function YearlyOverviewChartSection({
+  data,
+  selectedCategory,
+  onSelectCategory,
+}: YearlyOverviewChartSectionProps) {
   return (
     <div className="space-y-5">
       <div className="grid gap-3 md:grid-cols-3">
@@ -33,7 +39,11 @@ export function YearlyOverviewChartSection({ data }: YearlyOverviewChartSectionP
           各月の総支出とカテゴリ構成をまとめて確認できます。
         </div>
         <div className="mt-5">
-          <YearlyStackedBarChart months={data.months} />
+          <YearlyStackedBarChart
+            months={data.months}
+            selectedCategory={selectedCategory}
+            onSelectCategory={onSelectCategory}
+          />
         </div>
       </Card>
     </div>

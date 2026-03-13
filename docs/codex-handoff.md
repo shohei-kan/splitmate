@@ -1,120 +1,99 @@
 # Codex作業サマリー
 
 ## 1. 今回の目的
-- SplitMate の Phase 3-3 として、年次集計APIを追加し、Summary ページの年次タブで年間推移とカテゴリ別の月推移を見られるようにする
+- SplitMate の Phase 3-3.1 として、Summary 年次タブの積み上げ棒グラフとカテゴリ別棒グラフの読み取りやすさを小さく改善する
+- 年次グラフのカテゴリ配色を、淡さは保ちつつ今より見分けやすい色相差に調整する
+- 年次グラフのカテゴリ色を、より色相差の大きい方向へ再調整する
+- 年次グラフのカテゴリ色を、もう少し明るくパステル寄りに調整する
 
 ## 2. 確認した状況
-- Phase 3-2 時点で Summary ページは存在し、`MonthlySummaryPanel` と `SummaryTabs` が実装済みだった
-- 年次タブはプレースホルダ表示のみで、backend に年次専用 API はまだなかった
-- `monthly-by-category` API は月次用途で安定しており、そのまま維持したほうが安全だった
-- 既存 frontend にはグラフライブラリがなく、今回も素のレイアウトで年次グラフを組む方が最小差分だった
+- 年次タブには `YearlyStackedBarChart` と `YearlyCategoryBarChart` が実装済みだった
+- 両グラフとも数値は見えていたが、ホバー時の詳細確認は `title` 頼みで、凡例も明示されていなかった
+- カテゴリ色定義が年次グラフ2コンポーネント内で重複していた
+- backend 側の年次 API は今回の見た目改善には十分だったため、変更不要だった
 - 関連ファイル:
-  - `backend/expenses/views.py`
-  - `backend/expenses/serializers.py`
-  - `backend/expenses/tests.py`
-  - `backend/config/urls.py`
-  - `frontend/src/api/summary.ts`
-  - `frontend/src/api/types.ts`
-  - `frontend/src/lib/queryKeys.ts`
-  - `frontend/src/pages/SummaryPage.tsx`
-  - `frontend/src/components/summary/MonthlySummaryPanel.tsx`
+  - `frontend/src/components/summary/YearlyStackedBarChart.tsx`
+  - `frontend/src/components/summary/YearlyCategoryBarChart.tsx`
+  - `frontend/src/components/summary/YearlyOverviewChartSection.tsx`
+  - `frontend/src/components/summary/YearlyCategoryDetailSection.tsx`
+  - `frontend/src/components/summary/YearlySummaryPanel.tsx`
 
 ## 3. 原因
 ### 確定
-- 年次集計を返す API が未実装だった
-- Summary ページの年次タブに実データを表示するコンポーネントがなかった
-- 1年全体の月別構成と、カテゴリ単位の月推移を俯瞰できる UI が不足していた
+- 年次積み上げ棒グラフにカテゴリ名と色対応が分かる凡例が不足していた
+- 各月の詳細数値を、画面上でまとまった形で確認しづらかった
+- カテゴリ別棒グラフも月ごとの値確認がしづらかった
 
 ### 仮説
-- 年次グラフをさらに細かく調整したくなった場合、カテゴリ色マップを別ファイルに切り出したほうが保守しやすくなる可能性がある
+- 今後月次グラフ側にも同じ tooltip パターンを入れるなら、tooltip 表示の部品化余地がある
 
 ## 4. 実施した変更
 - 変更したファイル一覧:
-  - `backend/expenses/serializers.py`
-  - `backend/expenses/views.py`
-  - `backend/config/urls.py`
-  - `backend/expenses/tests.py`
-  - `frontend/src/api/types.ts`
-  - `frontend/src/api/summary.ts`
-  - `frontend/src/lib/queryKeys.ts`
-  - `frontend/src/components/summary/YearlySummaryPanel.tsx`
-  - `frontend/src/components/summary/YearlyOverviewChartSection.tsx`
-  - `frontend/src/components/summary/YearlyCategoryDetailSection.tsx`
+  - `frontend/src/components/summary/categoryColors.ts`
   - `frontend/src/components/summary/YearlyStackedBarChart.tsx`
   - `frontend/src/components/summary/YearlyCategoryBarChart.tsx`
-  - `frontend/src/pages/SummaryPage.tsx`
+  - `frontend/src/components/summary/YearlyOverviewChartSection.tsx`
+  - `frontend/src/components/summary/YearlyCategoryDetailSection.tsx`
+  - `frontend/src/components/summary/YearlySummaryPanel.tsx`
   - `docs/codex-handoff.md`
 - 各ファイルで何を変えたか:
-  - `backend/expenses/serializers.py`
-    - 年次 API 用に `YearlySummarySerializer` と月別・カテゴリ別 serializer を追加
-  - `backend/expenses/views.py`
-    - `YearlySummaryView` を追加
-    - 指定年の `Expense` を集計し、1月〜12月をゼロ埋めした月別総額とカテゴリ内訳を返すようにした
-  - `backend/config/urls.py`
-    - `/api/summary/yearly/` を追加
-  - `backend/expenses/tests.py`
-    - 年次 API の対象年、総額、月平均、件数、1〜12月順、ゼロ埋めを確認するテストを追加
-  - `frontend/src/api/types.ts`
-    - `YearlySummary`, `YearlySummaryMonth`, `YearlySummaryCategory` を追加
-  - `frontend/src/api/summary.ts`
-    - `fetchYearlySummary(year?: number)` を追加
-  - `frontend/src/lib/queryKeys.ts`
-    - 年次集計用 query key を追加
-  - `frontend/src/components/summary/YearlySummaryPanel.tsx`
-    - 年選択 state、選択カテゴリ state、年次 API 取得を集約
-  - `frontend/src/components/summary/YearlyOverviewChartSection.tsx`
-    - 年間総支出、月平均、年間件数、積み上げ棒グラフを表示
-  - `frontend/src/components/summary/YearlyCategoryDetailSection.tsx`
-    - カテゴリ選択 UI、カテゴリ別月推移、年間合計 / 月平均 / 最大月の補足表示を追加
+  - `frontend/src/components/summary/categoryColors.ts`
+    - 年次グラフ用のカテゴリ色・背景色を最小共通化
+    - 指定された新しい色案に差し替え、カテゴリ間の色相差を広げた
+    - さらに色相差を広げた別案に差し替え、緑・青・赤・紫・黄・茶の方向で判別しやすくした
+    - さらに明度を上げて、全体をややパステル寄りのトーンに再調整した
   - `frontend/src/components/summary/YearlyStackedBarChart.tsx`
-    - 1月〜12月の積み上げ棒グラフを追加
+    - 凡例を追加
+    - 各月の棒にカスタム tooltip を追加
+    - tooltip 内に対象月、総支出、カテゴリ別金額を表示
+    - 凡例クリックで選択カテゴリ変更と連動できるようにした
   - `frontend/src/components/summary/YearlyCategoryBarChart.tsx`
-    - 選択カテゴリの月別棒グラフを追加
-  - `frontend/src/pages/SummaryPage.tsx`
-    - 年次プレースホルダを `YearlySummaryPanel` に置き換えた
+    - 月別棒にカスタム tooltip を追加
+    - tooltip 内に月、カテゴリ名、金額を表示
+    - 背景色をカテゴリ色に合わせた薄色に調整
+  - `frontend/src/components/summary/YearlyOverviewChartSection.tsx`
+    - 選択カテゴリ state と連動できるよう props を追加
+  - `frontend/src/components/summary/YearlyCategoryDetailSection.tsx`
+    - カテゴリ別棒グラフへカテゴリラベルを渡すようにした
+  - `frontend/src/components/summary/YearlySummaryPanel.tsx`
+    - 凡例クリックでカテゴリ選択が反映されるように props を中継
 - 破壊的変更:
   - なし
-  - 既存の `/api/summary/monthly/` と `/api/summary/monthly-by-category/` は変更していない
+  - backend API は変更していない
 
 ## 5. テスト・確認結果
 - 実行したコマンド:
-  - `sed -n '1,260p' AGENTS.md`
-  - `sed -n '1,260p' docs/project-context.md`
-  - `sed -n '1,340p' backend/expenses/views.py`
-  - `sed -n '1,260p' backend/expenses/serializers.py`
-  - `sed -n '1,260p' backend/expenses/tests.py`
-  - `sed -n '1,260p' frontend/src/pages/SummaryPage.tsx`
-  - `sed -n '1,320p' frontend/src/components/summary/MonthlySummaryPanel.tsx`
-  - `sed -n '1,220p' frontend/src/api/summary.ts`
-  - `sed -n '1,260p' frontend/src/api/types.ts`
-  - `sed -n '1,220p' frontend/src/lib/queryKeys.ts`
-  - `sed -n '1,120p' backend/config/urls.py`
-  - `rg -n "MonthlyCategorySummaryView|AppSettingsView|MonthStatusUpdateView" backend/expenses/views.py`
-  - `python3 manage.py test expenses`
+  - `sed -n '1,260p' frontend/src/components/summary/YearlyStackedBarChart.tsx`
+  - `sed -n '1,260p' frontend/src/components/summary/YearlyCategoryBarChart.tsx`
+  - `sed -n '1,260p' frontend/src/components/summary/YearlyOverviewChartSection.tsx`
+  - `sed -n '1,320p' frontend/src/components/summary/YearlyCategoryDetailSection.tsx`
+  - `sed -n '1,220p' frontend/src/components/home/MonthlyCategoryBarChart.tsx`
   - `npm run build`
 - 成功したこと:
-  - backend テスト `Found 11 test(s) ... OK`
-  - frontend build `vite build` 完了
-  - `/api/summary/yearly/` の追加後も既存 backend テスト群は通過した
-  - Summary 年次タブの UI 追加後も frontend build は通過した
+  - `npm run build` 成功
+  - 年次積み上げ棒グラフに凡例と tooltip を追加した状態で build が通った
+  - カテゴリ別棒グラフに tooltip を追加した状態で build が通った
+  - 新しい配色に差し替えた後も年次グラフ関連の build は通った
+  - 再配色後も build は通り、年次グラフ側に自然に反映される状態を維持できた
+  - パステル寄りへの再調整後も build は通った
 - 失敗したこと:
   - なし
 - 未実施の確認:
-  - ブラウザ上での年次タブ実操作確認
-  - 年切替、カテゴリ切替、棒グラフの見やすさの実視確認
+  - ブラウザ上での hover / focus tooltip の実操作確認
+  - モバイル幅での tooltip の視認性確認
 
 ## 6. 未解決事項
-- 年次グラフの色マップはコンポーネント内に重複しており、今後さらにグラフが増えるなら共通化余地がある
-- 年次 API は現時点では金額中心で、割合や前年差分などは未実装
-- 年間件数は返しているが、月別件数までは今回返していない
+- tooltip は CSS ベースの簡易表示で、画面端の自動反転まではしていない
+- 月次グラフ側とは tooltip 実装をまだ共通化していない
+- モバイルでは hover がないため、主に focus / タップ時の見え方確認が必要
 
 ## 7. 次にやるなら
-1. ブラウザで Summary 年次タブを開き、積み上げ棒とカテゴリ別棒の操作感を確認する
-2. 月次 / 年次で色定義を共通化するか判断する
-3. 必要なら Phase 3-4 以降で前年差分やカテゴリ比較の補助表示を追加する
+1. ブラウザで年次タブを開き、凡例クリックと tooltip 表示を実操作確認する
+2. モバイル幅で tooltip の位置と読めるかを確認する
+3. 必要なら tooltip の位置調整や簡易凡例のレスポンシブ調整を追加する
 
 ## 8. ChatGPTに相談したいこと
-- 年次グラフの見やすさを上げるなら、次にどの補助情報を足すのが効果的か整理したい
+- tooltip を今の軽量実装のまま維持するか、将来共通コンポーネント化するか判断材料がほしい
 
 ## 9. ChatGPTに次に頼む依頼文
-- SplitMate の Phase 3-3 実装後の状態を前提に、年次タブの積み上げ棒グラフとカテゴリ別棒グラフをさらに見やすくするために、次に追加すると効果の高い補助情報（凡例、ツールチップ、前年差分、月ラベル、注釈など）を優先順位付きで整理してください。
+- SplitMate の Phase 3-3.1 実装後の状態を前提に、年次グラフの tooltip を今の CSS ベースの軽量実装のまま維持すべきか、共通 Tooltip コンポーネントに寄せるべきか、保守性と実装コストの観点で整理してください。

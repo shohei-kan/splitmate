@@ -77,7 +77,11 @@ export function YearlyCategoryDetailSection({
       </div>
 
       <div className="mt-5">
-        <YearlyCategoryBarChart months={data.months} category={effectiveCategory} />
+        <YearlyCategoryBarChart
+          months={data.months}
+          category={effectiveCategory}
+          categoryLabel={selected?.label}
+        />
       </div>
 
       <div className="mt-6 grid gap-3 md:grid-cols-3">
