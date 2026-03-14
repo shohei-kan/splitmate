@@ -1,6 +1,12 @@
 import datetime
 import calendar
+import base64
+import hashlib
+import hmac
+import json
+import logging
 
+from django.conf import settings
 from django.db.models import Sum, Count
 from rest_framework import viewsets, filters, parsers, status
 from rest_framework.views import APIView
@@ -19,6 +25,8 @@ from .serializers import (
     AppSettingsSerializer,
     )
 from .importers import import_rakuten_csv, import_mitsui_csv
+
+logger = logging.getLogger(__name__)
 
 
 def _get_or_create_app_settings() -> AppSettings:
@@ -45,6 +53,21 @@ def _resolve_year_month(params):
         return year, month
     except ValueError:
         return today.year, today.month
+
+
+def _verify_line_signature(body: bytes, signature: str) -> bool:
+    if not settings.LINE_CHANNEL_SECRET:
+        logger.warning("LINE webhook rejected because LINE_CHANNEL_SECRET is not configured")
+        return False
+
+    expected_signature = base64.b64encode(
+        hmac.new(
+            settings.LINE_CHANNEL_SECRET.encode("utf-8"),
+            body,
+            hashlib.sha256,
+        ).digest()
+    ).decode("utf-8")
+    return hmac.compare_digest(expected_signature, signature)
 
 
 class ExpenseViewSet(viewsets.ModelViewSet):
@@ -184,6 +207,43 @@ class StoreSuggestionsView(APIView):
         }
         serializer = StoreSuggestionsResponseSerializer(data)
         return Response(serializer.data)
+
+
+class LineWebhookView(APIView):
+    """
+    POST /api/integrations/line/webhook/
+
+    LINE webhook を最小限で受け、署名検証後に groupId をログへ出す。
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, *args, **kwargs):
+        signature = request.headers.get("X-Line-Signature", "")
+        if not signature:
+            return Response({"detail": "Missing X-Line-Signature header"}, status=status.HTTP_400_BAD_REQUEST)
+
+        body = request.body
+        if not _verify_line_signature(body, signature):
+            return Response({"detail": "Invalid LINE signature"}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            payload = json.loads(body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return Response({"detail": "Invalid JSON body"}, status=status.HTTP_400_BAD_REQUEST)
+
+        for event in payload.get("events", []):
+            source = event.get("source") or {}
+            group_id = source.get("groupId")
+            if group_id:
+                logger.info(
+                    "LINE webhook groupId detected: %s (event_type=%s)",
+                    group_id,
+                    event.get("type", "unknown"),
+                )
+
+        return Response({"ok": True}, status=status.HTTP_200_OK)
 
 
 #月別サマリー

@@ -1,55 +1,90 @@
 # Codex作業サマリー
 
 ## 1. 今回の目的
-- 今回の UX 改善内容を README に反映する
+- LINE グループの `groupId` を取得するための最小 webhook 受け口を backend に追加する
 
 ## 2. 確認した状況
-- `README.md` には Phase 3-1〜3-3.1 の機能概要は入っていたが、直近の Home tooltip 位置改善と Summary 月次の詳細スクロール改善はまだ記載されていなかった
-- 既存 README には `Current Features`, `Pages`, `Summary Features`, `Recent Updates` の章があり、追記中心で自然に更新できる構成だった
+- backend は `backend/config/urls.py` で APIView を直接ぶら下げる構成だった
+- 設定値は `backend/config/settings.py` の `env(...)` で読む実装だった
+- LINE 連携用の app や webhook エンドポイントはまだ存在しなかった
+- 既存 backend テストは `backend/expenses/tests.py` にまとまっていた
 - 関連ファイル:
-  - `README.md`
+  - `backend/config/settings.py`
+  - `backend/config/urls.py`
+  - `backend/expenses/views.py`
+  - `backend/expenses/tests.py`
+  - `.env.example`
 
 ## 3. 原因
 ### 確定
-- README が直近の UI 改善に追従していなかった
+- LINE webhook を受けるエンドポイントと署名検証処理が未実装だった
+- `LINE_CHANNEL_SECRET` を読む設定も未追加だった
 
 ### 仮説
-- 今後も小さな UX 改善が続くなら、`Recent Updates` に phase 単位とは別の `UX polish` のような整理を残すほうが追記しやすい
+- 将来通知送信本体まで進める場合は、LINE 連携コードを `expenses/views.py` から分離したほうが見通しは良くなる
 
 ## 4. 実施した変更
 - 変更したファイル一覧:
-  - `README.md`
+  - `backend/config/settings.py`
+  - `backend/config/urls.py`
+  - `backend/expenses/views.py`
+  - `backend/expenses/tests.py`
+  - `.env.example`
   - `docs/codex-handoff.md`
 - 各ファイルで何を変えたか:
-  - `README.md`
-    - `Current Features` に Home のカテゴリ hover tooltip と Summary 月次のカテゴリ詳細導線を追記
-    - `Pages` の Home 説明に、上位明細プレビューを追記
-    - `Summary Features` の月次項目に、カテゴリ選択時の当月明細表示と詳細スクロール誘導を追記
-    - `Recent Updates` に `UX polish` を追加し、Home tooltip の画面端対応と Summary 月次のスクロール改善を追記
+  - `backend/config/settings.py`
+    - `LINE_CHANNEL_SECRET` を env から読めるように追加
+  - `backend/config/urls.py`
+    - `POST /api/integrations/line/webhook/` を追加
+  - `backend/expenses/views.py`
+    - LINE 署名検証 helper を追加
+    - `LineWebhookView` を追加
+    - `X-Line-Signature` を検証し、成功時のみ payload を処理するようにした
+    - `events[].source.groupId` がある場合に `INFO` ログへ出すようにした
+    - `groupId` がないイベントでも 200 を返すようにした
+  - `backend/expenses/tests.py`
+    - 正しい署名で受理されること
+    - 不正署名で 403 を返すこと
+    - `groupId` を含むイベントでログ出力されること
+    - `groupId` がないイベントでも落ちずに 200 を返すこと
+    を確認するテストを追加
+  - `.env.example`
+    - `LINE_CHANNEL_SECRET` のサンプルキーを追加
 - 破壊的変更:
   - なし
 
 ## 5. テスト・確認結果
 - 実行したコマンド:
-  - `sed -n '1,320p' README.md`
-  - `sed -n '1,260p' docs/codex-handoff.md`
+  - `sed -n '1,260p' backend/config/settings.py`
+  - `sed -n '1,220p' backend/config/urls.py`
+  - `sed -n '1,360p' backend/expenses/tests.py`
+  - `rg --files backend | rg '(views.py|tests.py|urls.py|settings.py|integrations|app_settings|models.py)$'`
+  - `sed -n '1,260p' backend/expenses/views.py`
+  - `sed -n '260,520p' backend/expenses/views.py`
+  - `sed -n '1,260p' backend/expenses/models.py`
+  - `python3 manage.py test expenses`
+  - `sed -n '1,220p' .env.example`
 - 成功したこと:
-  - README の既存構成を崩さず、追記中心で更新できた
+  - backend テスト `Found 16 test(s) ... OK`
+  - LINE webhook の最小受け口、署名検証、`groupId` ログ出力まで実装できた
 - 失敗したこと:
   - なし
 - 未実施の確認:
-  - README の記述と実画面の目視照合
+  - 実際の LINE Platform からの webhook 疎通確認
+  - 本番環境での公開 URL 設定確認
 
 ## 6. 未解決事項
-- README の `Recent Updates` は phase 記述と UX 改善記述が混在し始めているため、将来的に整理が必要になる可能性がある
+- 今回は `groupId` をログ出力するだけで、DB 保存はしていない
+- `LINE_CHANNEL_SECRET` 未設定時は署名検証を通さず拒否する実装で、専用の設定確認エンドポイントはない
+- LINE の reply / push 送信機能は未実装
 
 ## 7. 次にやるなら
-1. 実画面を見ながら README の文言が過不足ないか確認する
-2. 次回以降の更新で `Recent Updates` の粒度を phase / polish / deploy などで整理する
-3. 必要ならスクリーンショット付きの説明追加を検討する
+1. 公開 webhook URL を用意して LINE Developers Console に設定し、グループで 1 回発話して `groupId` をログ確認する
+2. 確認できた `groupId` を env に `LINE_GROUP_ID=...` として手動設定する
+3. 通知本体実装時に、LINE 連携処理を専用モジュールへ切り出すか検討する
 
 ## 8. ChatGPTに相談したいこと
-- README の `Recent Updates` が増えてきたとき、phase ベースと UX 改善ベースのどちらで整理すると読みやすいか判断材料がほしい
+- 次に通知送信本体へ進む際、`groupId` を env 固定で持つべきか、最小の設定テーブルで持つべきか判断材料がほしい
 
 ## 9. ChatGPTに次に頼む依頼文
-- SplitMate の README は現在、Phase ごとの更新と UX 改善の更新が混在し始めています。今後アップデートが増えても読みやすく保つには、`Recent Updates` を phase 単位で維持すべきか、機能カテゴリや UX / deploy などで整理すべきかを提案してください。
+- SplitMate では LINE webhook から `groupId` を取得する最小実装まで入りました。次に通知送信本体へ進む前提で、`groupId` を `.env` 固定で持つ案と、最小の設定テーブルに保存する案を、運用・保守・将来拡張の観点で比較してください。

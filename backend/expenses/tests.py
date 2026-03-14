@@ -1,8 +1,13 @@
 
 
 import datetime
+import base64
+import hashlib
+import hmac
+import json
 
 from django.test import TestCase
+from django.test.utils import override_settings
 from rest_framework.test import APIClient
 
 from .models import AppSettings, Expense
@@ -347,3 +352,95 @@ class YearlySummaryApiTests(TestCase):
             res.data["months"][2],
             {"month": "2026-03", "total_amount": 0, "categories": []},
         )
+
+
+@override_settings(LINE_CHANNEL_SECRET="test-line-secret")
+class LineWebhookApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = "/api/integrations/line/webhook/"
+
+    def _signature(self, body: bytes) -> str:
+        return base64.b64encode(
+            hmac.new(
+                b"test-line-secret",
+                body,
+                hashlib.sha256,
+            ).digest()
+        ).decode("utf-8")
+
+    def test_accepts_valid_signature(self):
+        payload = {
+            "events": [
+                {
+                    "type": "message",
+                    "source": {"type": "group", "groupId": "group-123"},
+                }
+            ]
+        }
+        body = json.dumps(payload).encode("utf-8")
+
+        res = self.client.post(
+            self.url,
+            data=body,
+            content_type="application/json",
+            HTTP_X_LINE_SIGNATURE=self._signature(body),
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data, {"ok": True})
+
+    def test_rejects_invalid_signature(self):
+        body = json.dumps({"events": []}).encode("utf-8")
+
+        res = self.client.post(
+            self.url,
+            data=body,
+            content_type="application/json",
+            HTTP_X_LINE_SIGNATURE="invalid-signature",
+        )
+
+        self.assertEqual(res.status_code, 403)
+
+    def test_logs_group_id_when_present(self):
+        payload = {
+            "events": [
+                {
+                    "type": "message",
+                    "source": {"type": "group", "groupId": "group-xyz"},
+                }
+            ]
+        }
+        body = json.dumps(payload).encode("utf-8")
+
+        with self.assertLogs("expenses.views", level="INFO") as captured:
+            res = self.client.post(
+                self.url,
+                data=body,
+                content_type="application/json",
+                HTTP_X_LINE_SIGNATURE=self._signature(body),
+            )
+
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(any("group-xyz" in message for message in captured.output))
+
+    def test_accepts_events_without_group_id(self):
+        payload = {
+            "events": [
+                {
+                    "type": "follow",
+                    "source": {"type": "user", "userId": "user-123"},
+                }
+            ]
+        }
+        body = json.dumps(payload).encode("utf-8")
+
+        res = self.client.post(
+            self.url,
+            data=body,
+            content_type="application/json",
+            HTTP_X_LINE_SIGNATURE=self._signature(body),
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data, {"ok": True})
