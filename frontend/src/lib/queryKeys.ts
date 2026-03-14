@@ -8,6 +8,8 @@ export const qk = {
     ["summary", year, month] as const,
   summaryMonthlyCategory: (month: string) =>
     ["summary", "monthly-category", month] as const,
+  lineMonthlyNotificationStatus: (month: string) =>
+    ["integrations", "line", "monthly-status", month] as const,
   summaryYearly: (year: number) =>
     ["summary", "yearly", year] as const,
 

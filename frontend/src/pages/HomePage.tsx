@@ -7,7 +7,12 @@ import {
 } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 
-import { fetchMonthlyCategorySummary, fetchMonthlySummary } from "../api/summary";
+import {
+  fetchMonthlyCategorySummary,
+  fetchMonthlyLineNotificationStatus,
+  fetchMonthlySummary,
+  notifyMonthlyLine,
+} from "../api/summary";
 import {
   fetchExpenses,
   createExpense,
@@ -156,6 +161,16 @@ function clampYearMonth(year: number, month: number) {
   return { y, m, ok: y > 0 && m > 0 };
 }
 
+function parseMonthKey(value: string | null) {
+  if (!value) return null;
+  const matched = value.match(/^(\d{4})-(\d{2})$/);
+  if (!matched) return null;
+  const year = Number(matched[1]);
+  const month = Number(matched[2]);
+  const { ok } = clampYearMonth(year, month);
+  return ok ? { year, month } : null;
+}
+
 function parsePage(value: string | null) {
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : 1;
@@ -166,6 +181,9 @@ export function HomePage() {
 
   // URL の year/month を唯一のソースにする（状態ズレの温床を消す）
   const targetYM = useMemo(() => {
+    const monthKey = parseMonthKey(searchParams.get("month"));
+    if (monthKey) return monthKey;
+
     const yearParam = Number(searchParams.get("year"));
     const monthParam = Number(searchParams.get("month"));
     const { ok } = clampYearMonth(yearParam, monthParam);
@@ -191,6 +209,7 @@ export function HomePage() {
 
   const queryClient = useQueryClient();
   const [isMonthlyBreakdownOpen, setIsMonthlyBreakdownOpen] = useState(false);
+  const [lineNoticeMessage, setLineNoticeMessage] = useState<string | null>(null);
 
   const summaryQuery = useQuery({
     queryKey: qk.summaryMonth(targetYM.year, targetYM.month),
@@ -202,6 +221,11 @@ export function HomePage() {
     queryKey: qk.summaryMonthlyCategory(currentMonthKey),
     queryFn: () => fetchMonthlyCategorySummary(currentMonthKey),
     enabled: isMonthlyBreakdownOpen,
+  });
+
+  const lineNotificationStatusQuery = useQuery({
+    queryKey: qk.lineMonthlyNotificationStatus(currentMonthKey),
+    queryFn: () => fetchMonthlyLineNotificationStatus(currentMonthKey),
   });
 
   const storeSuggestionsQuery = useQuery({
@@ -227,6 +251,7 @@ export function HomePage() {
   const showWifePersonal = (data?.wife_personal ?? 0) > 0;
 
   const go = (delta: number) => {
+    setLineNoticeMessage(null);
     const nextYM = shiftMonth(targetYM.year, targetYM.month, delta);
     const next = new URLSearchParams(searchParams);
     next.set("year", String(nextYM.year));
@@ -236,6 +261,7 @@ export function HomePage() {
   };
 
   const goInitial = () => {
+    setLineNoticeMessage(null);
     const nextYM = getInitialYearMonth();
     const next = new URLSearchParams(searchParams);
     next.set("year", String(nextYM.year));
@@ -372,6 +398,30 @@ export function HomePage() {
       });
     },
   });
+
+  const notifyLineMutation = useMutation({
+    mutationFn: () => notifyMonthlyLine(currentMonthKey),
+    onSuccess: (result) => {
+      setLineNoticeMessage(
+        result.send_count > 1 ? "LINEへ再通知しました" : "LINEへ通知しました"
+      );
+      queryClient.invalidateQueries({
+        queryKey: qk.lineMonthlyNotificationStatus(currentMonthKey),
+      });
+    },
+  });
+
+  const formatLastSentAt = (value: string | null | undefined) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString("ja-JP", {
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   const canSubmit =
     !!form.store.trim() &&
@@ -522,43 +572,103 @@ export function HomePage() {
           ) : null}
         </div>
 
-        <div className="flex items-center justify-center gap-3">
-          <button
-            type="button"
-            className="h-10 w-10 rounded-full border border-transparent text-2xl text-[#60758B] hover:border-[#D5E2EF] hover:bg-white"
-            onClick={() => go(-1)}
-            aria-label="prev month"
-          >
-            ‹
-          </button>
+        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_auto_minmax(220px,1fr)] lg:items-start">
+          <div className="hidden lg:block" aria-hidden="true" />
 
-          <div className="min-w-40 text-center text-2xl font-bold text-[#19385A]">
-            {targetYM.year}年{targetYM.month}月
+          <div className="flex items-center justify-center gap-3 lg:justify-self-center">
+            <button
+              type="button"
+              className="h-10 w-10 rounded-full border border-transparent text-2xl text-[#60758B] hover:border-[#D5E2EF] hover:bg-white"
+              onClick={() => go(-1)}
+              aria-label="prev month"
+            >
+              ‹
+            </button>
+
+            <div className="min-w-40 text-center text-2xl font-bold text-[#19385A]">
+              {targetYM.year}年{targetYM.month}月
+            </div>
+
+            <button
+              type="button"
+              className="h-10 w-10 rounded-full border border-transparent text-2xl text-[#60758B] hover:border-[#D5E2EF] hover:bg-white"
+              onClick={() => go(1)}
+              aria-label="next month"
+            >
+              ›
+            </button>
+
+            <button
+              type="button"
+              className="ml-2 h-10 rounded-full border border-[#D1DCE8] bg-white px-4 text-sm font-medium hover:bg-[#F7FAFD]"
+              onClick={goInitial}
+              aria-label="back to current month"
+              title="当月に戻る"
+            >
+              今月
+            </button>
+
+            {(summaryQuery.isFetching || expensesQuery.isFetching) &&
+              !(summaryQuery.isLoading || expensesQuery.isLoading) && (
+                <div className="ml-2 text-xs text-[#6A7C8E]">更新中...</div>
+              )}
           </div>
 
-          <button
-            type="button"
-            className="h-10 w-10 rounded-full border border-transparent text-2xl text-[#60758B] hover:border-[#D5E2EF] hover:bg-white"
-            onClick={() => go(1)}
-            aria-label="next month"
-          >
-            ›
-          </button>
+          <div className="flex justify-end lg:justify-self-end">
+            <div className="group relative flex flex-col items-end gap-2">
+              <button
+                type="button"
+                className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  lineNotificationStatusQuery.data?.is_sent
+                    ? "border border-[#C8D8D1] bg-[#F3FAF6] text-[#21684B] hover:bg-[#EAF6EF]"
+                    : "bg-[#2B8CE6] text-white hover:bg-[#247FD1]"
+                }`}
+                onClick={() => {
+                  setLineNoticeMessage(null);
+                  notifyLineMutation.mutate();
+                }}
+                disabled={notifyLineMutation.isPending || summaryQuery.isLoading}
+                aria-describedby="line-notify-status-tooltip"
+              >
+                <span>{notifyLineMutation.isPending ? "通知中..." : "LINEで通知"}</span>
+                {lineNotificationStatusQuery.data?.is_sent && (
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/80 text-[10px] font-bold text-[#21684B]"
+                  >
+                    ✓
+                  </span>
+                )}
+              </button>
 
-          <button
-            type="button"
-            className="ml-2 h-10 rounded-full border border-[#D1DCE8] bg-white px-4 text-sm font-medium hover:bg-[#F7FAFD]"
-            onClick={goInitial}
-            aria-label="back to current month"
-            title="当月に戻る"
-          >
-            今月
-          </button>
+              <div
+                id="line-notify-status-tooltip"
+                className="pointer-events-none absolute right-0 top-full z-10 mt-2 hidden min-w-52 rounded-xl border border-[#D7E1EC] bg-white/98 px-3 py-2 text-left text-xs text-[#4F6479] shadow-lg group-hover:block group-focus-within:block"
+              >
+                <div className="font-semibold text-[#143A61]">
+                  {lineNotificationStatusQuery.data?.is_sent ? "通知済み" : "未通知"}
+                </div>
+                <div className="mt-1">
+                  最終送信:{" "}
+                  {lineNotificationStatusQuery.data?.last_sent_at
+                    ? formatLastSentAt(lineNotificationStatusQuery.data.last_sent_at)
+                    : "—"}
+                </div>
+                <div className="mt-1">
+                  送信回数: {lineNotificationStatusQuery.data?.send_count ?? 0}回
+                </div>
+              </div>
 
-          {(summaryQuery.isFetching || expensesQuery.isFetching) &&
-            !(summaryQuery.isLoading || expensesQuery.isLoading) && (
-              <div className="ml-2 text-xs text-[#6A7C8E]">更新中...</div>
-            )}
+              {lineNoticeMessage && (
+                <div className="text-sm text-green-700">{lineNoticeMessage}</div>
+              )}
+              {notifyLineMutation.error && (
+                <div className="max-w-72 text-right text-sm text-red-600">
+                  {(notifyLineMutation.error as Error).message}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">

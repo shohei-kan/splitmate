@@ -49,6 +49,21 @@ export interface YearlySummary {
   months: YearlySummaryMonth[];
 }
 
+export interface MonthlyLineNotificationStatus {
+  month: string;
+  is_sent: boolean;
+  last_sent_at: string | null;
+  send_count: number;
+}
+
+export interface MonthlyLineNotifyResponse {
+  ok: boolean;
+  month: string;
+  sent: boolean;
+  last_sent_at: string | null;
+  send_count: number;
+}
+
 export interface StoreSuggestion {
   name: string;
   count: number;

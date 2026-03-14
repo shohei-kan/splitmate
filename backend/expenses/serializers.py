@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AppSettings, Expense, ExclusionRule
+from .models import AppSettings, Expense, ExclusionRule, MonthlyLineNotification
 import datetime  
 
 class ExpenseSerializer(serializers.ModelSerializer):
@@ -162,3 +162,31 @@ class AppSettingsSerializer(serializers.ModelSerializer):
             "excluded_words",
             "highlight_threshold",
         ]
+
+
+class MonthlyLineNotificationSerializer(serializers.ModelSerializer):
+    is_sent = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MonthlyLineNotification
+        fields = [
+            "month",
+            "is_sent",
+            "last_sent_at",
+            "send_count",
+        ]
+
+    def get_is_sent(self, obj):
+        return obj.last_sent_at is not None
+
+
+class MonthlyLineNotifyRequestSerializer(serializers.Serializer):
+    month = serializers.RegexField(r"^\d{4}-\d{2}$")
+
+
+class MonthlyLineNotifyResponseSerializer(serializers.Serializer):
+    ok = serializers.BooleanField()
+    month = serializers.CharField()
+    sent = serializers.BooleanField()
+    last_sent_at = serializers.DateTimeField(allow_null=True)
+    send_count = serializers.IntegerField()

@@ -134,3 +134,17 @@ class AppSettings(models.Model):
 
     def __str__(self) -> str:
         return "AppSettings"
+
+
+class MonthlyLineNotification(models.Model):
+    month = models.CharField(max_length=7, unique=True)
+    last_sent_at = models.DateTimeField(blank=True, null=True)
+    send_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-month"]
+
+    def __str__(self) -> str:
+        return f"{self.month} ({self.send_count})"

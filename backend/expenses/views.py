@@ -5,14 +5,18 @@ import hashlib
 import hmac
 import json
 import logging
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from django.conf import settings
+from django.db import OperationalError, ProgrammingError
 from django.db.models import Sum, Count
+from django.utils import timezone
 from rest_framework import viewsets, filters, parsers, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
-from .models import AppSettings, Expense, ExclusionRule
+from .models import AppSettings, Expense, ExclusionRule, MonthlyLineNotification
 from .serializers import (
     ExpenseSerializer,
     MonthlySummarySerializer,
@@ -23,6 +27,9 @@ from .serializers import (
     StoreSuggestionsResponseSerializer,
     ExclusionRuleSerializer,
     AppSettingsSerializer,
+    MonthlyLineNotificationSerializer,
+    MonthlyLineNotifyRequestSerializer,
+    MonthlyLineNotifyResponseSerializer,
     )
 from .importers import import_rakuten_csv, import_mitsui_csv
 
@@ -68,6 +75,96 @@ def _verify_line_signature(body: bytes, signature: str) -> bool:
         ).digest()
     ).decode("utf-8")
     return hmac.compare_digest(expected_signature, signature)
+
+
+def _build_monthly_summary(year: int, month: int, status_filter=None):
+    first_day = datetime.date(year, month, 1)
+    last_day = datetime.date(
+        year,
+        month,
+        calendar.monthrange(year, month)[1],
+    )
+
+    qs = Expense.objects.filter(date__gte=first_day, date__lte=last_day)
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+
+    shared_total = (
+        qs.filter(burden_type=Expense.BurdenType.SHARED)
+        .aggregate(total=Sum("amount"))["total"]
+        or 0
+    )
+    wife_shared = (
+        qs.filter(
+            burden_type=Expense.BurdenType.SHARED,
+            payer=Expense.CardUser.WIFE,
+        )
+        .aggregate(total=Sum("amount"))["total"]
+        or 0
+    )
+    wife_personal = (
+        qs.filter(burden_type=Expense.BurdenType.WIFE_ONLY)
+        .aggregate(total=Sum("amount"))["total"]
+        or 0
+    )
+    me_only_total = (
+        qs.filter(burden_type=Expense.BurdenType.ME_ONLY)
+        .aggregate(total=Sum("amount"))["total"]
+        or 0
+    )
+    half = shared_total // 2
+    transfer_amount = half - wife_shared + wife_personal
+
+    return {
+        "year": year,
+        "month": month,
+        "shared_total": shared_total,
+        "wife_shared": wife_shared,
+        "wife_personal": wife_personal,
+        "me_only_total": me_only_total,
+        "half": half,
+        "transfer_amount": transfer_amount,
+    }
+
+
+def _build_home_month_url(request, month_key: str):
+    origin = request.headers.get("Origin")
+    if origin:
+        return f"{origin.rstrip('/')}/?month={month_key}"
+    return request.build_absolute_uri(f"/?month={month_key}")
+
+
+def _build_line_monthly_message(request, month_key: str, transfer_amount: int):
+    parsed = datetime.date.fromisoformat(f"{month_key}-01")
+    return "\n".join(
+        [
+            f"{parsed.year}年{parsed.month}月分の入力が完了しました。",
+            f"振込額：¥{transfer_amount:,}",
+            "内容を確認して、未入力があれば追加入力をお願いします。",
+            "問題なければ、振り込みもお願いします。",
+            _build_home_month_url(request, month_key),
+        ]
+    )
+
+
+def _send_line_push_message(group_id: str, text: str):
+    payload = json.dumps(
+        {
+            "to": group_id,
+            "messages": [{"type": "text", "text": text}],
+        }
+    ).encode("utf-8")
+    req = urllib_request.Request(
+        "https://api.line.me/v2/bot/message/push",
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {settings.LINE_CHANNEL_ACCESS_TOKEN}",
+        },
+        method="POST",
+    )
+    with urllib_request.urlopen(req, timeout=10) as response:
+        response.read()
 
 
 class ExpenseViewSet(viewsets.ModelViewSet):
@@ -246,6 +343,103 @@ class LineWebhookView(APIView):
         return Response({"ok": True}, status=status.HTTP_200_OK)
 
 
+class MonthlyLineNotifyView(APIView):
+    """
+    POST /api/integrations/line/notify-monthly/
+    """
+
+    def post(self, request, *args, **kwargs):
+        serializer = MonthlyLineNotifyRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        month_key = serializer.validated_data["month"]
+        parsed = datetime.date.fromisoformat(f"{month_key}-01")
+
+        if not settings.LINE_GROUP_ID:
+            return Response({"detail": "LINE_GROUP_ID is not configured"}, status=status.HTTP_400_BAD_REQUEST)
+        if not settings.LINE_CHANNEL_ACCESS_TOKEN:
+            return Response(
+                {"detail": "LINE_CHANNEL_ACCESS_TOKEN is not configured"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        summary = _build_monthly_summary(parsed.year, parsed.month)
+        message = _build_line_monthly_message(request, month_key, summary["transfer_amount"])
+
+        try:
+            _send_line_push_message(settings.LINE_GROUP_ID, message)
+        except urllib_error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="ignore")
+            return Response(
+                {"detail": f"LINE push failed: {detail or exc.reason}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        except urllib_error.URLError as exc:
+            return Response(
+                {"detail": f"LINE push failed: {exc.reason}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        try:
+            notification, _created = MonthlyLineNotification.objects.get_or_create(month=month_key)
+            notification.last_sent_at = timezone.now()
+            notification.send_count += 1
+            notification.save(update_fields=["last_sent_at", "send_count", "updated_at"])
+        except (ProgrammingError, OperationalError):
+            return Response(
+                {"detail": "LINE notification table is not ready. Run migrations first."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        response_serializer = MonthlyLineNotifyResponseSerializer(
+            {
+                "ok": True,
+                "month": notification.month,
+                "sent": True,
+                "last_sent_at": notification.last_sent_at,
+                "send_count": notification.send_count,
+            }
+        )
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
+
+
+class MonthlyLineNotifyStatusView(APIView):
+    """
+    GET /api/integrations/line/notify-monthly-status/?month=YYYY-MM
+    """
+
+    def get(self, request, *args, **kwargs):
+        serializer = MonthlyLineNotifyRequestSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        month_key = serializer.validated_data["month"]
+
+        try:
+            notification = MonthlyLineNotification.objects.filter(month=month_key).first()
+        except (ProgrammingError, OperationalError):
+            logger.warning("MonthlyLineNotification table is not ready; returning unsent status")
+            return Response(
+                {
+                    "month": month_key,
+                    "is_sent": False,
+                    "last_sent_at": None,
+                    "send_count": 0,
+                },
+                status=status.HTTP_200_OK,
+            )
+        if not notification:
+            return Response(
+                {
+                    "month": month_key,
+                    "is_sent": False,
+                    "last_sent_at": None,
+                    "send_count": 0,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(MonthlyLineNotificationSerializer(notification).data, status=status.HTTP_200_OK)
+
+
 #月別サマリー
 class MonthlySummaryView(APIView):
     """
@@ -272,67 +466,9 @@ class MonthlySummaryView(APIView):
             year = today.year
             month = today.month
 
-        first_day = datetime.date(year, month, 1)
-        last_day = datetime.date(
-            year,
-            month,
-            calendar.monthrange(year, month)[1],
-        )
-
-        qs = Expense.objects.filter(date__gte=first_day, date__lte=last_day)
-
         # draft / final で絞り込みたいとき用 (オプション)
         status_filter = request.query_params.get("status")
-        if status_filter:
-            qs = qs.filter(status=status_filter)
-
-        # ① 共有支出合計（誰が払ったかは関係なく shared だけ全部）
-        shared_total = (
-            qs.filter(burden_type=Expense.BurdenType.SHARED)
-            .aggregate(total=Sum("amount"))["total"]
-            or 0
-        )
-
-        # ② 妻が払った共有分（payer=wife）
-        #    → 実際にお金を払った人ベースで集計する
-        wife_shared = (
-            qs.filter(
-                burden_type=Expense.BurdenType.SHARED,
-                payer=Expense.CardUser.WIFE,
-            )
-            .aggregate(total=Sum("amount"))["total"]
-            or 0
-        )
-
-        # ③ 妻の個人利用
-        #    burden_type=wife_only は、CSV でも手入力でも全部カウント
-        wife_personal = (
-            qs.filter(burden_type=Expense.BurdenType.WIFE_ONLY)
-            .aggregate(total=Sum("amount"))["total"]
-            or 0
-        )
-
-        # ④ 私個人の支出（参考用）
-        me_only_total = (
-            qs.filter(burden_type=Expense.BurdenType.ME_ONLY)
-            .aggregate(total=Sum("amount"))["total"]
-            or 0
-        )
-
-        # ⑤ 折半額＆振込額
-        half = shared_total // 2
-        transfer_amount = half - wife_shared + wife_personal
-
-        summary_data = {
-            "year": year,
-            "month": month,
-            "shared_total": shared_total,
-            "wife_shared": wife_shared,
-            "wife_personal": wife_personal,
-            "me_only_total": me_only_total,
-            "half": half,
-            "transfer_amount": transfer_amount,
-        }
+        summary_data = _build_monthly_summary(year, month, status_filter=status_filter)
 
         serializer = MonthlySummarySerializer(summary_data)
         return Response(serializer.data)

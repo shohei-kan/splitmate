@@ -31,6 +31,8 @@ from expenses.views import (
     AppSettingsView,
     StoreSuggestionsView,
     LineWebhookView,
+    MonthlyLineNotifyView,
+    MonthlyLineNotifyStatusView,
 )
 
 router = routers.DefaultRouter()
@@ -46,6 +48,8 @@ urlpatterns = [
     path("api/summary/yearly/", YearlySummaryView.as_view(), name="yearly-summary"),
     path("api/stores/suggestions/", StoreSuggestionsView.as_view(), name="store-suggestions"),
     path("api/integrations/line/webhook/", LineWebhookView.as_view(), name="line-webhook"),
+    path("api/integrations/line/notify-monthly/", MonthlyLineNotifyView.as_view(), name="line-notify-monthly"),
+    path("api/integrations/line/notify-monthly-status/", MonthlyLineNotifyStatusView.as_view(), name="line-notify-monthly-status"),
     path("api/import/rakuten/", RakutenCSVImportView.as_view(), name="import-rakuten"),
     path("api/import/mitsui/", MitsuiCSVImportView.as_view(), name="import-mitsui"),
     path("api/settings/", AppSettingsView.as_view(), name="app-settings"),

@@ -5,12 +5,13 @@ import base64
 import hashlib
 import hmac
 import json
+from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 from django.test.utils import override_settings
 from rest_framework.test import APIClient
 
-from .models import AppSettings, Expense
+from .models import AppSettings, Expense, MonthlyLineNotification
 
 
 class ExpensePatchRulesTests(TestCase):
@@ -444,3 +445,132 @@ class LineWebhookApiTests(TestCase):
 
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.data, {"ok": True})
+
+
+@override_settings(
+    LINE_GROUP_ID="group-123",
+    LINE_CHANNEL_ACCESS_TOKEN="test-access-token",
+)
+class MonthlyLineNotifyApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.notify_url = "/api/integrations/line/notify-monthly/"
+        self.status_url = "/api/integrations/line/notify-monthly-status/"
+        Expense.objects.create(
+            date=datetime.date(2026, 3, 1),
+            store="A",
+            amount=20000,
+            burden_type=Expense.BurdenType.SHARED,
+            payer=Expense.CardUser.ME,
+        )
+        Expense.objects.create(
+            date=datetime.date(2026, 3, 2),
+            store="B",
+            amount=10000,
+            burden_type=Expense.BurdenType.SHARED,
+            payer=Expense.CardUser.WIFE,
+        )
+        Expense.objects.create(
+            date=datetime.date(2026, 3, 3),
+            store="C",
+            amount=4000,
+            burden_type=Expense.BurdenType.WIFE_ONLY,
+            payer=Expense.CardUser.WIFE,
+        )
+
+    @patch("expenses.views.urllib_request.urlopen")
+    def test_notify_monthly_sends_line_message_and_updates_status(self, mock_urlopen):
+        mocked_response = MagicMock()
+        mocked_response.read.return_value = b"{}"
+        mock_urlopen.return_value.__enter__.return_value = mocked_response
+
+        res = self.client.post(
+            self.notify_url,
+            {"month": "2026-03"},
+            format="json",
+            HTTP_ORIGIN="http://192.168.11.6:8080",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["ok"], True)
+        self.assertEqual(res.data["month"], "2026-03")
+        self.assertEqual(res.data["sent"], True)
+        self.assertEqual(res.data["send_count"], 1)
+
+        notification = MonthlyLineNotification.objects.get(month="2026-03")
+        self.assertEqual(notification.send_count, 1)
+        self.assertIsNotNone(notification.last_sent_at)
+
+        request_obj = mock_urlopen.call_args.args[0]
+        payload = json.loads(request_obj.data.decode("utf-8"))
+        self.assertEqual(payload["to"], "group-123")
+        self.assertIn("2026年3月分の入力が完了しました。", payload["messages"][0]["text"])
+        self.assertIn("振込額：¥9,000", payload["messages"][0]["text"])
+        self.assertIn("http://192.168.11.6:8080/?month=2026-03", payload["messages"][0]["text"])
+
+    @patch("expenses.views.urllib_request.urlopen")
+    def test_notify_monthly_increments_send_count_on_resend(self, mock_urlopen):
+        mocked_response = MagicMock()
+        mocked_response.read.return_value = b"{}"
+        mock_urlopen.return_value.__enter__.return_value = mocked_response
+        MonthlyLineNotification.objects.create(month="2026-03", send_count=1)
+
+        res = self.client.post(
+            self.notify_url,
+            {"month": "2026-03"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["send_count"], 2)
+
+    def test_notify_monthly_rejects_when_group_id_missing(self):
+        with override_settings(LINE_GROUP_ID=""):
+            res = self.client.post(
+                self.notify_url,
+                {"month": "2026-03"},
+                format="json",
+            )
+
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("LINE_GROUP_ID", res.data["detail"])
+
+    def test_notify_monthly_rejects_when_access_token_missing(self):
+        with override_settings(LINE_CHANNEL_ACCESS_TOKEN=""):
+            res = self.client.post(
+                self.notify_url,
+                {"month": "2026-03"},
+                format="json",
+            )
+
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("LINE_CHANNEL_ACCESS_TOKEN", res.data["detail"])
+
+    def test_notify_status_returns_saved_state(self):
+        notification = MonthlyLineNotification.objects.create(
+            month="2026-03",
+            send_count=2,
+        )
+        notification.last_sent_at = datetime.datetime(2026, 3, 5, 12, 30, tzinfo=datetime.timezone.utc)
+        notification.save(update_fields=["last_sent_at", "send_count", "updated_at"])
+
+        res = self.client.get(self.status_url, {"month": "2026-03"})
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["month"], "2026-03")
+        self.assertEqual(res.data["is_sent"], True)
+        self.assertEqual(res.data["send_count"], 2)
+
+    def test_notify_status_returns_default_when_not_sent(self):
+        res = self.client.get(self.status_url, {"month": "2026-03"})
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(
+            res.data,
+            {
+                "month": "2026-03",
+                "is_sent": False,
+                "last_sent_at": None,
+                "send_count": 0,
+            },
+        )
