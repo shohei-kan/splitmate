@@ -1,61 +1,53 @@
 # Codex作業サマリー
 
 ## 1. 今回の目的
-- README に `v0.2.1` 以降の更新内容を反映する
+- スマホ版ヘッダーのロゴが小さすぎたため、視認性を少し戻す
 
 ## 2. 確認した状況
-- `README.md` には `Recent Updates` セクションはあったが、`v0.2.1` 以降の更新を version 起点でまとめた説明はなかった
-- git log 上では `v0.2.1` 以降に、LINE webhook、LINE 月次通知、Home ヘッダー / アコーディオンの UI 調整が入っていた
+- 直前のスマホヘッダー簡素化で、`TopNav` のロゴは `h-9` まで縮小されていた
+- その結果、スマホ幅では少し小さく見えていた
 - 関連ファイル:
-  - `README.md`
+  - `frontend/src/components/layout/TopNav.tsx`
 
 ## 3. 原因
 ### 確定
-- README が直近の更新に追従していなかった
+- スマホ幅のロゴ高さを詰めすぎていた
 
 ### 仮説
-- 今後もタグ単位で運用するなら、`Recent Updates` の中で `Since vX.Y.Z` を切る書き方が継続しやすい
+- 端末によっては `h-12` でもまだ小さく感じる可能性はあるが、まずは一段戻すのが妥当
 
 ## 4. 実施した変更
 - 変更したファイル一覧:
-  - `README.md`
+  - `frontend/src/components/layout/TopNav.tsx`
   - `docs/codex-handoff.md`
 - 各ファイルで何を変えたか:
-  - `README.md`
-    - `Current Features` に Home からの LINE 手動通知を追記
-    - `Pages` の Home 説明を、軽量な「今月の内訳」アコーディオンと月ヘッダー右端の LINE 通知アクションに更新
-    - `Recent Updates` に `Since v0.2.1` を追加
-    - `Since v0.2.1` では以下を追記
-      - LINE webhook による `groupId` 取得
-      - Home からの LINE 月次通知
-      - 月単位の通知状態保存
-      - LINE 通知 UI のミニマル化
-      - Home の「今月の内訳」圧縮と導線整理
+  - `frontend/src/components/layout/TopNav.tsx`
+    - スマホ幅のロゴ高さを `h-9` から `h-12` に戻した
 - 破壊的変更:
   - なし
 
 ## 5. テスト・確認結果
 - 実行したコマンド:
-  - `sed -n '1,260p' README.md`
-  - `git -C /Users/kannoshouhei/dev/splitmate log --oneline --decorate -n 20`
-  - `rg -n "v0\\.2\\.1|0\\.2\\.1|Recent Updates|Release|更新履歴" README.md docs -S`
+  - `npm run build`
+  - `sed -n '52,92p' frontend/src/components/layout/TopNav.tsx`
 - 成功したこと:
-  - `v0.2.1` 以降の更新内容を README に反映できた
+  - `npm run build` 成功
+  - ロゴサイズ調整後も frontend build が通った
 - 失敗したこと:
   - なし
 - 未実施の確認:
-  - README 文言と実画面の細かな整合確認
+  - 実機または DevTools でスマホ幅のロゴ見え方確認
 
 ## 6. 未解決事項
-- `Recent Updates` は phase 記述と version 記述が混在し始めているため、将来的に整理方針を決めたほうがよい
+- ロゴサイズは少し戻しただけで、スマホヘッダー全体の高さはそのまま
 
 ## 7. 次にやるなら
-1. README の `Recent Updates` を phase ベースで維持するか version ベースへ寄せるか決める
-2. 必要なら `v0.2.1` 以前も version 単位で整理する
-3. スクリーンショット付きの簡易 changelog を追加するか検討する
+1. スマホ幅でロゴとナビアイコンのバランス確認
+2. 必要ならロゴの上下余白も微調整
+3. 必要なら超小型幅だけ別サイズに分岐
 
 ## 8. ChatGPTに相談したいこと
-- README の更新履歴を phase ベースと version ベースのどちらで揃えると今後読みやすいか判断材料がほしい
+- スマホヘッダーでロゴとナビの主従バランスをどこまで取るべきか判断材料がほしい
 
 ## 9. ChatGPTに次に頼む依頼文
-- SplitMate の README では、`Recent Updates` に phase ベースの記述があり、今回 `Since v0.2.1` も追加しました。今後の保守性と読みやすさを考えると、更新履歴は phase ベースと version ベースのどちらに寄せるのがよいか整理してください。
+- SplitMate では、スマホヘッダーのロゴを `h-9` から `h-12` に戻して視認性を少し上げました。スマホヘッダーではロゴとナビアイコンのどちらを主役に見せるべきか、家計アプリの日常利用前提で UI バランスの考え方を整理してください。

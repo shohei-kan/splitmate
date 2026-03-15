@@ -1,11 +1,11 @@
-import type { ChangeEvent, InputHTMLAttributes } from "react";
+import { useState, type ChangeEvent, type InputHTMLAttributes, type KeyboardEvent } from "react";
 
 import type { StoreSuggestion } from "../../api/types";
 
 type StoreComboboxProps = {
   value: string;
   suggestions: StoreSuggestion[];
-  onValueChange: (value: string) => void;
+  onValueChange: (value: string, meta?: { isComposing: boolean }) => void;
   inputClassName?: string;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange">;
 
@@ -18,8 +18,21 @@ export function StoreCombobox({
   inputClassName = "",
   ...props
 }: StoreComboboxProps) {
+  const [isComposing, setIsComposing] = useState(false);
+
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    onValueChange(e.target.value);
+    const nativeEvent = e.nativeEvent as InputEvent & { isComposing?: boolean };
+    onValueChange(e.target.value, {
+      isComposing: isComposing || Boolean(nativeEvent.isComposing),
+    });
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if ((isComposing || e.nativeEvent.isComposing) && e.key === "Enter") {
+      e.preventDefault();
+      return;
+    }
+    props.onKeyDown?.(e);
   };
 
   return (
@@ -29,6 +42,12 @@ export function StoreCombobox({
         list={DATALIST_ID}
         value={value}
         onChange={handleChange}
+        onCompositionStart={() => setIsComposing(true)}
+        onCompositionEnd={(e) => {
+          setIsComposing(false);
+          onValueChange(e.currentTarget.value, { isComposing: false });
+        }}
+        onKeyDown={handleKeyDown}
         className={inputClassName}
       />
       <datalist id={DATALIST_ID}>

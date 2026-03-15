@@ -27,6 +27,12 @@ function parseMonthParam(month?: string) {
   return { year, month: monthNumber };
 }
 
+function formatCompactDate(date: string) {
+  const matched = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!matched) return date;
+  return `${Number(matched[2])}/${Number(matched[3])}`;
+}
+
 function labelPayer(v: Expense["payer"] | null | undefined) {
   if (!v) return "—";
   if (v === "me") return "パパ";
@@ -303,15 +309,58 @@ export function MonthlySummaryPanel({ initialMonth }: { initialMonth?: string })
               {(summaryQuery.data?.categories.find((item) => item.category === selectedCategory)?.label ?? "カテゴリ")}
               の明細（{selectedCategoryQuery.data?.length ?? 0}件）
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
+            <div className="sm:hidden">
+              {(selectedCategoryQuery.data ?? []).length === 0 ? (
+                <div className="px-6 py-8 text-center text-[#6A7C8E]">明細がありません</div>
+              ) : (
+                <div className="space-y-3 p-4">
+                  {(selectedCategoryQuery.data ?? []).map((expense) => (
+                    <details
+                      key={expense.id}
+                      className="rounded-2xl border border-[#E1E8F0] bg-white/95 p-4"
+                    >
+                      <summary className="list-none cursor-pointer">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-xs text-[#6A7C8E]">{expense.date}</div>
+                            <div className="mt-2 truncate text-base font-semibold text-[#1A395B]">
+                              {expense.store.trim() || "（店名なし）"}
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right text-base font-semibold text-[#163A5E]">
+                            {yen(expense.amount)}
+                          </div>
+                        </div>
+                      </summary>
+
+                      <div className="mt-4 space-y-3 border-t border-[#EEF3F8] pt-4 text-sm text-[#596F85]">
+                        <div>
+                          <div className="text-xs text-[#7A8C9E]">支払い者</div>
+                          <div className="mt-1">{labelPayer(expense.payer)}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-[#7A8C9E]">メモ</div>
+                          <div className="mt-1">{expense.memo || "—"}</div>
+                        </div>
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="hidden overflow-x-auto sm:block">
+              <table className="w-full table-fixed text-sm">
                 <thead>
                   <tr className="border-b border-[#E1E8F0] bg-[#F7FAFE] text-[#667D93]">
-                    <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">日付</th>
-                    <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">店名</th>
-                    <th className="whitespace-nowrap px-6 py-3 text-right font-semibold">金額</th>
-                    <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">支払い者</th>
-                    <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">メモ</th>
+                    <th className="w-16 whitespace-nowrap px-2 py-3 text-left font-semibold lg:w-[14%] lg:px-5">日付</th>
+                    <th className="w-[42%] px-2 py-3 text-left font-semibold lg:w-[44%] lg:px-5">購入先</th>
+                    <th className="w-24 whitespace-nowrap px-2 py-3 text-right font-semibold lg:w-[14%] lg:px-5">金額</th>
+                    <th className="w-20 whitespace-nowrap px-2 py-3 text-left font-semibold text-xs lg:w-[14%] lg:px-5 lg:text-sm">
+                      <span className="lg:hidden">支払</span>
+                      <span className="hidden lg:inline">支払い者</span>
+                    </th>
+                    <th className="w-[22%] px-2 py-3 text-left font-semibold lg:w-[14%] lg:px-5">メモ</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -324,20 +373,30 @@ export function MonthlySummaryPanel({ initialMonth }: { initialMonth?: string })
                   ) : (
                     (selectedCategoryQuery.data ?? []).map((expense) => (
                       <tr key={expense.id} className="border-b border-[#EEF3F8] last:border-b-0">
-                        <td className="whitespace-nowrap px-6 py-4 text-base text-[#4D6278]">
-                          {expense.date}
+                        <td className="whitespace-nowrap px-2 py-4 text-sm text-[#4D6278] lg:px-5 lg:text-base">
+                          <span className="lg:hidden">{formatCompactDate(expense.date)}</span>
+                          <span className="hidden lg:inline">{expense.date}</span>
                         </td>
-                        <td className="px-6 py-4 text-base text-[#1A395B]">
-                          {expense.store.trim() || "（店名なし）"}
+                        <td className="px-2 py-4 text-sm text-[#1A395B] align-middle lg:px-5 lg:text-base">
+                          <span className="block truncate lg:hidden">
+                            {expense.store.trim() || "（店名なし）"}
+                          </span>
+                          <span
+                            className="hidden break-words leading-5 lg:[display:-webkit-box] lg:overflow-hidden lg:[-webkit-line-clamp:2] lg:[-webkit-box-orient:vertical]"
+                          >
+                            {expense.store.trim() || "（店名なし）"}
+                          </span>
                         </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-right text-base font-semibold text-[#163A5E]">
+                        <td className="whitespace-nowrap px-2 py-4 text-right text-sm font-semibold text-[#163A5E] lg:px-5 lg:text-base">
                           {yen(expense.amount)}
                         </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-base text-[#596F85]">
+                        <td className="whitespace-nowrap px-2 py-4 text-sm text-[#596F85] lg:px-5">
                           {labelPayer(expense.payer)}
                         </td>
-                        <td className="px-6 py-4 text-base text-[#596F85]">
-                          {expense.memo || "—"}
+                        <td className="px-2 py-4 text-sm text-[#596F85] lg:px-5">
+                          <span className="block truncate">
+                            {expense.memo || "—"}
+                          </span>
                         </td>
                       </tr>
                     ))

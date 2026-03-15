@@ -176,6 +176,12 @@ function parsePage(value: string | null) {
   return Number.isInteger(n) && n > 0 ? n : 1;
 }
 
+function formatCompactDate(date: string) {
+  const matched = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!matched) return date;
+  return `${Number(matched[2])}/${Number(matched[3])}`;
+}
+
 export function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -295,6 +301,7 @@ export function HomePage() {
     memo: "",
   }));
   const [isComposing, setIsComposing] = useState(false);
+  const [isEditComposing, setIsEditComposing] = useState(false);
 
   const setFormTextField = (field: "store" | "amount" | "memo", value: string) => {
     setForm((prev) => {
@@ -704,8 +711,11 @@ export function HomePage() {
               inputClassName="h-11 rounded-xl border border-[#D1DCE8] bg-white px-4 text-base placeholder:text-[#91A2B4]"
               value={form.store}
               suggestions={storeSuggestionsQuery.data?.stores ?? []}
-              onValueChange={(value) =>
-                setFormTextField("store", toHalfWidthKatakanaAndDigits(value))
+              onValueChange={(value, meta) =>
+                setFormTextField(
+                  "store",
+                  meta?.isComposing ? value : toHalfWidthKatakanaAndDigits(value)
+                )
               }
               placeholder="店名を入力または選択"
             />
@@ -783,19 +793,183 @@ export function HomePage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+          <div className="sm:hidden">
+            {expensesQuery.isLoading ? (
+              <div className="px-6 py-8 text-center text-[#6A7C8E]">読み込み中...</div>
+            ) : rows.length === 0 ? (
+              <div className="px-6 py-10 text-center text-[#6A7C8E]">データがありません</div>
+            ) : (
+              <div className="space-y-3 p-4">
+                {rows.map((e) => {
+                  const rowSaving = savingRowIds.includes(e.id);
+                  return (
+                    <details
+                      key={e.id}
+                      className="rounded-2xl border border-[#E1E8F0] bg-white/95 p-4"
+                    >
+                      <summary className="list-none cursor-pointer">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 text-xs text-[#6A7C8E]">
+                              <span>{e.date}</span>
+                              <span
+                                className="relative inline-flex shrink-0"
+                                onClick={(ev) => ev.stopPropagation()}
+                                onPointerDown={(ev) => ev.stopPropagation()}
+                                onKeyDown={(ev) => ev.stopPropagation()}
+                              >
+                                <select
+                                  className={`h-7 appearance-none rounded-xl border border-transparent px-2.5 pr-6 text-xs font-semibold ${categoryBadgeClass(
+                                    e.category
+                                  )}`}
+                                  value={e.category}
+                                  disabled={rowSaving}
+                                  aria-label="カテゴリ変更"
+                                  onChange={(ev) => {
+                                    const nextCategory = ev.target.value as Category;
+                                    if (nextCategory === e.category) return;
+                                    saveInlineField(e.id, "category", nextCategory);
+                                  }}
+                                >
+                                  {CATEGORY_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                                <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-current">
+                                  ▾
+                                </span>
+                              </span>
+                            </div>
+                            <div className="mt-2 truncate text-base font-semibold text-[#1A395B]">
+                              {e.store}
+                            </div>
+                          </div>
+                          <div
+                            className={`shrink-0 text-right text-base font-semibold ${
+                              isHighAmount(e.amount, highlightThreshold)
+                                ? "text-red-600"
+                                : "text-[#1A395B]"
+                            }`}
+                          >
+                            {yen(e.amount)}
+                          </div>
+                        </div>
+                        <div
+                          className="mt-2 flex items-start justify-end gap-2"
+                          onClick={(ev) => ev.stopPropagation()}
+                          onPointerDown={(ev) => ev.stopPropagation()}
+                          onKeyDown={(ev) => ev.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#F6DEE1] bg-white text-[#D7747D] hover:bg-[#FFF7F8]"
+                            title="削除"
+                            onClick={() => {
+                              const ok = window.confirm("この支出を削除しますか？");
+                              if (!ok) return;
+                              deleteMutation.mutate(e.id);
+                            }}
+                          >
+                            <svg
+                              aria-hidden="true"
+                              viewBox="0 0 24 24"
+                              className="h-4 w-4"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M3 6h18" />
+                              <path d="M8 6V4h8v2" />
+                              <path d="M19 6l-1 14H6L5 6" />
+                              <path d="M10 11v6" />
+                              <path d="M14 11v6" />
+                            </svg>
+                          </button>
+                        </div>
+                      </summary>
+
+                      <div className="mt-4 space-y-3 border-t border-[#EEF3F8] pt-4 text-sm">
+                        <div className="grid grid-cols-2 gap-3 text-[#596F85]">
+                          <div>
+                            <div className="text-xs text-[#7A8C9E]">カード利用者</div>
+                            <div className="mt-1">{labelCardUser(e.card_user)}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-[#7A8C9E]">支払い者</div>
+                            <div className="mt-1">{labelPayer(e.payer)}</div>
+                          </div>
+                        </div>
+                        <div className="text-[#596F85]">
+                          <div className="text-xs text-[#7A8C9E]">メモ</div>
+                          <div className="mt-1">{e.memo || "—"}</div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={`inline-flex items-center rounded-xl px-3 py-1 text-sm font-semibold ${burdenBadgeClass(
+                              e.burden_type
+                            )}`}
+                          >
+                            {burdenTypeLabel(e.burden_type)}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              className="rounded-md px-2 py-1 text-sm font-semibold text-[#60758B] hover:bg-[#EEF4FB] hover:text-[#2B8CE6] disabled:cursor-not-allowed disabled:opacity-45"
+                              title="登録内容を編集"
+                              onClick={() => {
+                                setEditForm({
+                                  id: e.id,
+                                  date: e.date,
+                                  store: e.store,
+                                  amount: String(e.amount),
+                                  card_user: e.card_user ?? "unknown",
+                                  payer: e.payer,
+                                  burden_type: e.burden_type,
+                                  category: e.category,
+                                  memo: e.memo ?? "",
+                                  source: e.source,
+                                });
+                              }}
+                            >
+                              ✎
+                            </button>
+                          </div>
+                        </div>
+                        {rowSaving && <div className="text-xs text-[#6A7C8E]">保存中...</div>}
+                        {inlineErrors[e.id] && (
+                          <div className="text-xs text-red-600">{inlineErrors[e.id]}</div>
+                        )}
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="hidden overflow-x-auto sm:block">
+            <table className="w-full table-fixed text-sm">
               <thead>
                 <tr className="border-b border-[#E1E8F0] bg-[#F7FAFE] text-[#667D93]">
-                  <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">日付</th>
-                  <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">購入先</th>
-                  <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">カード利用者</th>
-                  <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">支払い者</th>
-                  <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">カテゴリ</th>
-                  <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">負担区分</th>
-                  <th className="whitespace-nowrap px-6 py-3 text-right font-semibold">金額</th>
-                  <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">メモ</th>
-                  <th className="whitespace-nowrap px-6 py-3 text-left font-semibold">操作</th>
+                  <th className="w-16 whitespace-nowrap px-2 py-3 text-left font-semibold lg:w-[12%] lg:px-6">日付</th>
+                  <th className="w-[28%] px-2 py-3 text-left font-semibold lg:w-[28%] lg:px-6">購入先</th>
+                  <th className="w-20 whitespace-nowrap px-2 py-3 text-left font-semibold text-xs lg:w-[10%] lg:px-5 lg:text-sm">
+                    <span className="lg:hidden">カード</span>
+                    <span className="hidden lg:inline">カード利用者</span>
+                  </th>
+                  <th className="w-20 whitespace-nowrap px-2 py-3 text-left font-semibold text-xs lg:w-[10%] lg:px-5 lg:text-sm">
+                    <span className="lg:hidden">支払</span>
+                    <span className="hidden lg:inline">支払い者</span>
+                  </th>
+                  <th className="w-24 whitespace-nowrap px-2 py-3 text-left font-semibold lg:w-[12%] lg:px-5">カテゴリ</th>
+                  <th className="hidden w-28 whitespace-nowrap px-2 py-3 text-left font-semibold xl:table-cell xl:w-[14%] xl:px-5">負担区分</th>
+                  <th className="w-24 whitespace-nowrap px-2 py-3 text-right font-semibold lg:w-[10%] lg:px-6">金額</th>
+                  <th className="w-[18%] px-2 py-3 text-left font-semibold lg:w-[10%] lg:px-5">メモ</th>
+                  <th className="w-16 whitespace-nowrap px-2 py-3 text-center font-semibold lg:w-[8%] lg:px-4 lg:text-right">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -823,31 +997,41 @@ export function HomePage() {
 
                     return (
                     <tr key={e.id} className="border-b border-[#EEF3F8] last:border-b-0 hover:bg-[#FAFCFF]">
-                      <td className="whitespace-nowrap px-6 py-4 text-base text-[#4D6278]">{e.date}</td>
-                      <td className="min-w-55 px-6 py-4 text-base text-[#1A395B]">{e.store}</td>
-                      <td className="whitespace-nowrap px-6 py-4 text-base text-[#1A395B]">
+                      <td className="whitespace-nowrap px-2 py-4 text-sm text-[#4D6278] lg:px-6 lg:text-base">
+                        <span className="lg:hidden">{formatCompactDate(e.date)}</span>
+                        <span className="hidden lg:inline">{e.date}</span>
+                      </td>
+                      <td className="px-2 py-4 text-sm text-[#1A395B] align-middle lg:px-6 lg:text-base">
+                        <span className="block truncate lg:hidden">{e.store}</span>
                         <span
-                          className={`inline-flex items-center rounded-xl px-3 py-1 text-sm font-semibold ${cardUserBadgeClass(
+                          className="hidden wrap-break-word leading-5 lg:[display:-webkit-box] lg:overflow-hidden lg:[-webkit-line-clamp:2] lg:[-webkit-box-orient:vertical]"
+                        >
+                          {e.store}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-4 text-sm text-[#1A395B] lg:px-5">
+                        <span
+                          className={`inline-flex items-center rounded-xl px-2 py-1 text-xs font-semibold lg:px-4 lg:text-sm ${cardUserBadgeClass(
                             e.card_user
                           )}`}
                         >
                           {labelCardUser(e.card_user)}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-6 py-4 text-base text-[#1A395B]">
+                      <td className="whitespace-nowrap px-2 py-4 text-sm text-[#1A395B] lg:px-5">
                         <span
-                          className={`inline-flex items-center rounded-xl px-3 py-1 text-sm font-semibold ${payerBadgeClass(
+                          className={`inline-flex items-center rounded-xl px-2 py-1 text-xs font-semibold lg:px-4 lg:text-sm ${payerBadgeClass(
                             e.payer
                           )}`}
                         >
                           {labelPayer(e.payer)}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-6 py-4 text-base text-[#596F85]">
+                      <td className="whitespace-nowrap px-2 py-4 text-sm text-[#596F85] lg:px-5">
                         {isEditingCategory ? (
                           <select
                             autoFocus
-                            className={`h-9 min-w-22 rounded-xl border border-transparent px-3 py-1 text-sm font-semibold ${categoryBadgeClass(
+                            className={`h-9 w-full rounded-xl border border-transparent px-2 py-1 text-xs font-semibold lg:px-3 lg:text-sm ${categoryBadgeClass(
                               currentCategory
                             )}`}
                             value={currentCategory}
@@ -880,7 +1064,7 @@ export function HomePage() {
                         ) : (
                           <button
                             type="button"
-                            className={`inline-flex h-9 min-w-22 items-center rounded-xl px-3 py-1 text-sm font-semibold ${categoryBadgeClass(
+                            className={`inline-flex h-9 w-full items-center justify-between rounded-xl px-2 py-1 text-xs font-semibold lg:px-3 lg:text-sm ${categoryBadgeClass(
                               currentCategory
                             )} ${rowSaving ? "cursor-not-allowed opacity-60" : ""}`}
                             aria-label="カテゴリを編集"
@@ -904,13 +1088,13 @@ export function HomePage() {
                             {categoryLabel(currentCategory)}
                             <span className="ml-1">▾</span>
                           </button>
-                        )}
+                          )}
                       </td>
-                      <td className="whitespace-nowrap px-6 py-4">
+                      <td className="hidden whitespace-nowrap px-2 py-4 xl:table-cell xl:px-5">
                         {isEditingBurdenType ? (
                           <select
                             autoFocus
-                            className={`h-9 min-w-24 rounded-xl border border-transparent px-3 py-1 text-sm font-semibold ${burdenBadgeClass(
+                            className={`h-9 w-full rounded-xl border border-transparent px-3 py-1 text-xs font-semibold lg:text-sm ${burdenBadgeClass(
                               currentBurdenType
                             )}`}
                             value={currentBurdenType}
@@ -943,7 +1127,7 @@ export function HomePage() {
                         ) : (
                           <button
                             type="button"
-                            className={`inline-flex h-9 min-w-24 items-center rounded-xl px-3 py-1 text-sm font-semibold ${burdenBadgeClass(
+                            className={`inline-flex h-9 w-full items-center justify-between rounded-xl px-3 py-1 text-xs font-semibold lg:text-sm ${burdenBadgeClass(
                               currentBurdenType
                             )} ${rowSaving ? "cursor-not-allowed opacity-60" : ""}`}
                             aria-label="負担区分を編集"
@@ -970,7 +1154,7 @@ export function HomePage() {
                         )}
                       </td>
                       <td
-                        className={`whitespace-nowrap px-6 py-4 text-right text-base font-semibold ${
+                        className={`whitespace-nowrap px-2 py-4 text-right text-sm font-semibold lg:px-6 lg:text-base ${
                           isHighAmount(e.amount, highlightThreshold)
                             ? "text-red-600"
                             : "text-[#1A395B]"
@@ -979,12 +1163,16 @@ export function HomePage() {
                       >
                         {yen(e.amount)}
                       </td>
-                      <td className="min-w-45 px-6 py-4 text-base text-[#596F85]">{e.memo || "-"}</td>
-                      <td className="whitespace-nowrap px-6 py-4">
-                        <div className="flex items-center gap-3">
+                      <td className="px-2 py-4 text-sm text-[#596F85] lg:px-5">
+                        <span className="block truncate">
+                          {e.memo || "-"}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-4 lg:px-4">
+                        <div className="flex items-center justify-center gap-3 lg:justify-end">
                           <button
                             type="button"
-                            className="rounded-md px-2 py-1 text-sm font-semibold text-[#60758B] hover:bg-[#EEF4FB] hover:text-[#2B8CE6] disabled:cursor-not-allowed disabled:opacity-45"
+                            className="rounded-md p-1.5 text-sm font-semibold text-[#60758B] hover:bg-[#EEF4FB] hover:text-[#2B8CE6] disabled:cursor-not-allowed disabled:opacity-45"
                             title="登録内容を編集"
                             onClick={() => {
                               setEditForm({
@@ -1005,7 +1193,7 @@ export function HomePage() {
                           </button>
                           <button
                             type="button"
-                            className="text-[#E05A66] hover:text-[#CC2F3C]"
+                            className="rounded-md p-1.5 text-[#E05A66] hover:bg-[#FFF4F5] hover:text-[#CC2F3C]"
                             title="削除"
                             onClick={() => {
                               const ok = window.confirm("この支出を削除しますか？");
@@ -1107,10 +1295,26 @@ export function HomePage() {
                   <input
                     className="h-10 rounded-lg border border-[#D1DCE8] px-3 text-sm text-[#153B61]"
                     value={editForm.store}
-                    onChange={(e) =>
+                    onCompositionStart={() => setIsEditComposing(true)}
+                    onCompositionEnd={(e) => {
+                      setIsEditComposing(false);
                       setEditForm((p) =>
-                        p ? { ...p, store: toHalfWidthKatakanaAndDigits(e.target.value) } : p
-                      )
+                        p ? { ...p, store: toHalfWidthKatakanaAndDigits(e.currentTarget.value) } : p
+                      );
+                    }}
+                    onChange={(e) =>
+                      setEditForm((p) => {
+                        const nativeEvent = e.nativeEvent as InputEvent & { isComposing?: boolean };
+                        return p
+                          ? {
+                              ...p,
+                              store:
+                                isEditComposing || nativeEvent.isComposing
+                                  ? e.target.value
+                                  : toHalfWidthKatakanaAndDigits(e.target.value),
+                            }
+                          : p;
+                      })
                     }
                   />
                 </label>
@@ -1121,10 +1325,26 @@ export function HomePage() {
                     inputMode="numeric"
                     className="h-10 rounded-lg border border-[#D1DCE8] px-3 text-sm text-[#153B61]"
                     value={editForm.amount}
-                    onChange={(e) =>
+                    onCompositionStart={() => setIsEditComposing(true)}
+                    onCompositionEnd={(e) => {
+                      setIsEditComposing(false);
                       setEditForm((p) =>
-                        p ? { ...p, amount: toHalfWidthKatakanaAndDigits(e.target.value) } : p
-                      )
+                        p ? { ...p, amount: toHalfWidthKatakanaAndDigits(e.currentTarget.value) } : p
+                      );
+                    }}
+                    onChange={(e) =>
+                      setEditForm((p) => {
+                        const nativeEvent = e.nativeEvent as InputEvent & { isComposing?: boolean };
+                        return p
+                          ? {
+                              ...p,
+                              amount:
+                                isEditComposing || nativeEvent.isComposing
+                                  ? e.target.value
+                                  : toHalfWidthKatakanaAndDigits(e.target.value),
+                            }
+                          : p;
+                      })
                     }
                   />
                 </label>
@@ -1195,10 +1415,26 @@ export function HomePage() {
                   <textarea
                     className="min-h-21 rounded-lg border border-[#D1DCE8] px-3 py-2 text-sm text-[#153B61]"
                     value={editForm.memo}
-                    onChange={(e) =>
+                    onCompositionStart={() => setIsEditComposing(true)}
+                    onCompositionEnd={(e) => {
+                      setIsEditComposing(false);
                       setEditForm((p) =>
-                        p ? { ...p, memo: toHalfWidthKatakanaAndDigits(e.target.value) } : p
-                      )
+                        p ? { ...p, memo: toHalfWidthKatakanaAndDigits(e.currentTarget.value) } : p
+                      );
+                    }}
+                    onChange={(e) =>
+                      setEditForm((p) => {
+                        const nativeEvent = e.nativeEvent as InputEvent & { isComposing?: boolean };
+                        return p
+                          ? {
+                              ...p,
+                              memo:
+                                isEditComposing || nativeEvent.isComposing
+                                  ? e.target.value
+                                  : toHalfWidthKatakanaAndDigits(e.target.value),
+                            }
+                          : p;
+                      })
                     }
                   />
                 </label>
